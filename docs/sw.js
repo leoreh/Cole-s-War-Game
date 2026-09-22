@@ -40,8 +40,11 @@ self.addEventListener('activate', function (e) {
   );
 });
 
-/* Only what was precached is answered from the cache, and then cache first
-   with a refresh in the background, so the next load has the new page. */
+/* Only what was precached is answered by this worker. The page itself
+   (a navigation) goes to the network first, with a short timeout, and to
+   the cache only when the network fails, so a new build shows on the very
+   next load and the game still opens with no network. The icons and the
+   manifest, which never change between builds, come cache first. */
 function handled(request) {
   if (request.method !== 'GET') return false;
   var url = new URL(request.url);
@@ -53,16 +56,28 @@ function handled(request) {
   return ASSETS.indexOf('./' + rest) >= 0 || (rest === '' && ASSETS.indexOf('./') >= 0);
 }
 
+function withTimeout(promise, ms) {
+  return new Promise(function (resolve, reject) {
+    var t = setTimeout(function () { reject(new Error('timeout')); }, ms);
+    promise.then(function (v) { clearTimeout(t); resolve(v); },
+                 function (err) { clearTimeout(t); reject(err); });
+  });
+}
+
 self.addEventListener('fetch', function (e) {
   if (!handled(e.request)) return;
+  var isPage = e.request.mode === 'navigate';
   e.respondWith(
     caches.open(CACHE).then(function (cache) {
       return cache.match(e.request, { ignoreSearch: true }).then(function (hit) {
         var live = fetch(e.request).then(function (res) {
           if (res && res.ok) cache.put(e.request, res.clone());
           return res;
-        }).catch(function () { return hit; });
-        return hit || live;
+        });
+        if (!isPage) return hit || live.catch(function () { return hit; });
+        return withTimeout(live, 4000).catch(function () {
+          return hit || live;
+        });
       });
     })
   );
