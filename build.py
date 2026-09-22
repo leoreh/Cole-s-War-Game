@@ -7,8 +7,9 @@ Every <link rel="stylesheet" href="X"> in src/index.html becomes
 written twice: docs/index.html, which GitHub Pages serves, and WarGame.html
 at the folder root, the offline single file. docs/sw.js is written from
 src/sw.js with __VERSION__ replaced by the first twelve hex digits of the
-SHA-256 of docs/index.html, so every build invalidates the old cache, and
-src/manifest.webmanifest is copied into docs/.
+SHA-256 of the page (taken before the same digits are stamped into the page,
+where the settings drawer shows them), so every build invalidates the old
+cache, and src/manifest.webmanifest is copied into docs/.
 
 The icons in docs/icons are drawn by dev/make_icons.py and are not touched
 here. Run with: python build.py
@@ -81,13 +82,14 @@ def report(path: Path) -> None:
 
 def main() -> None:
     html = inline()
+    version = hashlib.sha256(html.encode("utf-8")).hexdigest()[:12]
+    html = html.replace("__VERSION__", version)
 
     page = DOCS / "index.html"
     write(page, html)
     single = ROOT / "WarGame.html"
     write(single, html)
 
-    version = hashlib.sha256(page.read_bytes()).hexdigest()[:12]
     write(DOCS / "sw.js", read(SW).replace("__VERSION__", version))
 
     DOCS.mkdir(parents=True, exist_ok=True)

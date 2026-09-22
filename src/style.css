@@ -548,12 +548,47 @@ body {
   block-size: 32%;
   color: var(--fire);
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
-  /* the bow itself takes the tap, so a target that may be both attacked and
-     fired at still offers the two */
-  pointer-events: auto;
-  cursor: pointer;
 }
 .bowmark svg { inline-size: 100%; block-size: 100%; display: block; }
+
+/* the choice on a square the piece may both strike and fire at: two pills
+   over the enemy, wider than the square, the way the Heal pill is */
+.pick {
+  position: absolute;
+  inset-block-start: 0;
+  left: 0;
+  inline-size: 12.5%;
+  block-size: 12.5%;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3em;
+  font-size: calc(var(--sq) * 0.24);
+  /* the pills read left to right in both languages, so that on the edge
+     columns they can be kept inside the board */
+  direction: ltr;
+}
+.pick--start { justify-content: flex-start; }
+.pick--end { justify-content: flex-end; }
+.pick-btn {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  padding: 0.15em 0.55em;
+  border-radius: 999px;
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  line-height: 1.5;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+.pick-btn svg { inline-size: 1.1em; block-size: 1.1em; display: block; }
+.pick-btn--attack { background: var(--danger); color: #fff; }
+.pick-btn--fire { background: var(--fire); color: #2a1600; }
 
 .heal-btn {
   position: absolute;

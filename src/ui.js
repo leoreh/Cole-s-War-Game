@@ -59,6 +59,9 @@ window.WarGame = window.WarGame || {};
 
   /* ------------------------------------------------------- app state --- */
 
+  /* written by build.py: the first twelve hex digits of the page's hash */
+  var BUILD = '__VERSION__';
+
   var G = {
     settings: null,
     state: null,      /* the game on the board: there is always one */
@@ -67,6 +70,7 @@ window.WarGame = window.WarGame || {};
     history: [],      /* { state, start } before each action: see pushHistory */
     sel: null,        /* id of the selected piece */
     acts: [],         /* its legal actions */
+    pick: null,       /* a square it may both strike and fire at: the choice is open */
     busy: false,      /* animating or the computer is playing: input is blocked */
     aiRun: 0,         /* the id of the computer turn now playing */
     boardClass: ''    /* the theme class now on the board and on <body> */
@@ -276,6 +280,10 @@ window.WarGame = window.WarGame || {};
     var nodes = document.querySelectorAll('[data-i18n]');
     for (var i = 0; i < nodes.length; i++) {
       nodes[i].textContent = t(nodes[i].getAttribute('data-i18n'));
+    }
+    if (el.buildStamp) {
+      /* the source folder carries the placeholder, and says nothing */
+      el.buildStamp.textContent = BUILD.indexOf('__') === 0 ? '' : t('settings.build', { v: BUILD });
     }
     var titled = document.querySelectorAll('[data-i18n-title]');
     for (var k = 0; k < titled.length; k++) {
@@ -584,6 +592,7 @@ window.WarGame = window.WarGame || {};
 
   function select(id) {
     G.sel = id;
+    G.pick = null;
     G.acts = Engine.legalActions(G.state, id) || [];
     renderMarks();
     renderPieces();
@@ -592,6 +601,7 @@ window.WarGame = window.WarGame || {};
 
   function deselect() {
     G.sel = null;
+    G.pick = null;
     G.acts = [];
     renderMarks();
     renderPieces();
@@ -610,13 +620,6 @@ window.WarGame = window.WarGame || {};
     for (var i = 0; i < el.sqs.length; i++) {
       el.sqs[i].classList.remove('sq--sel', 'sq--act');
     }
-  }
-
-  function bindFire(node, target) {
-    node.addEventListener('click', function (e) {
-      e.stopPropagation();
-      doAction({ type: 'fire', piece: G.sel, target: target });
-    });
   }
 
   function renderMarks() {
@@ -650,11 +653,11 @@ window.WarGame = window.WarGame || {};
       } else if (act.type === 'fire') {
         var f = st.pieces[act.target];
         if (f) {
-          var fm = markNode(f.row, f.col, 'mark--fire',
+          /* a target the piece may also strike keeps its red ring and only
+             gains the bow: the tap on it asks which of the two */
+          var dual = actionsAt(f.row, f.col).length > 1;
+          markNode(f.row, f.col, dual ? 'mark--dual' : 'mark--fire',
             '<span class="bowmark">' + Icons.bowMark + '</span>');
-          /* the bow takes a tap of its own, so a square that is both an
-             attack and a fire target still offers the two */
-          bindFire(fm.firstChild, act.target);
         }
       } else if (act.type === 'heal' && me) {
         var b = make('button', 'heal-btn', '<span>' + esc(t('action.heal')) + '</span>');
@@ -667,24 +670,46 @@ window.WarGame = window.WarGame || {};
         el.marks.appendChild(b);
       }
     }
+
+    if (G.pick) renderPick(G.pick);
   }
 
-  /* the action whose target square is this one, if the selection has one */
-  function actionAt(row, col) {
-    var st = G.state;
+  /* the two pills on a square the piece may both strike and fire at */
+  function renderPick(pk) {
+    var cls = 'pick' + (pk.col === 0 ? ' pick--start' : pk.col === 7 ? ' pick--end' : '');
+    var box = make('div', cls, '');
+    box.style.transform = tf(pk.row, pk.col);
+    pk.acts.forEach(function (a) {
+      var b = make('button', 'pick-btn pick-btn--' + a.type,
+        (a.type === 'fire' ? Icons.bowMark : Icons.swordMark) +
+        '<span>' + esc(t('action.' + a.type)) + '</span>');
+      b.type = 'button';
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();
+        doAction(a);
+      });
+      box.appendChild(b);
+    });
+    el.marks.appendChild(box);
+  }
+
+  /* the actions whose target square is this one: none, one, or a strike
+     and a shot at the same enemy */
+  function actionsAt(row, col) {
+    var st = G.state, out = [];
     for (var i = 0; i < G.acts.length; i++) {
       var a = G.acts[i];
       if (a.type === 'move' && a.to.row === row && a.to.col === col) {
-        return { type: 'move', piece: G.sel, to: { row: row, col: col } };
+        out.push({ type: 'move', piece: G.sel, to: { row: row, col: col } });
       }
       if (a.type === 'attack' || a.type === 'fire') {
         var p = st.pieces[a.target];
         if (p && p.row === row && p.col === col) {
-          return { type: a.type, piece: G.sel, target: a.target };
+          out.push({ type: a.type, piece: G.sel, target: a.target });
         }
       }
     }
-    return null;
+    return out;
   }
 
   function whyNot(p) {
@@ -712,8 +737,14 @@ window.WarGame = window.WarGame || {};
     if (st.pendingMerge) { msg(t('msg.pending')); return; }
 
     if (G.sel) {
-      var act = actionAt(row, col);
-      if (act) { doAction(act); return; }
+      var acts = actionsAt(row, col);
+      if (acts.length > 1) {
+        /* the same enemy may be struck or shot: the player chooses */
+        G.pick = { row: row, col: col, acts: acts };
+        renderMarks();
+        return;
+      }
+      if (acts.length) { doAction(acts[0]); return; }
     }
 
     var p = Engine.pieceAt(st, row, col);
@@ -752,6 +783,7 @@ window.WarGame = window.WarGame || {};
 
     G.state = res.state;
     G.sel = null;
+    G.pick = null;
     G.acts = [];
     clearMarks();
     G.busy = true;
@@ -1772,6 +1804,7 @@ window.WarGame = window.WarGame || {};
     el.rulesBody = $('rules-body');
     el.appearanceBody = $('appearance-body');
     el.settingsBody = $('settings-body');
+    el.buildStamp = $('build-stamp');
     el.presets = $('presets');
     el.themes = $('themes');
 

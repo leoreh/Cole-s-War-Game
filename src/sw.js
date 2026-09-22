@@ -70,7 +70,10 @@ self.addEventListener('fetch', function (e) {
   e.respondWith(
     caches.open(CACHE).then(function (cache) {
       return cache.match(e.request, { ignoreSearch: true }).then(function (hit) {
-        var live = fetch(e.request).then(function (res) {
+        /* the page is asked for afresh, past the browser's own cache, so
+           the ten minutes GitHub allows it do not add to the wait */
+        var ask = isPage ? new Request(e.request.url, { cache: 'no-cache', credentials: 'same-origin' }) : e.request;
+        var live = fetch(ask).then(function (res) {
           if (res && res.ok) cache.put(e.request, res.clone());
           return res;
         });

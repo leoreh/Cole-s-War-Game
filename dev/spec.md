@@ -286,7 +286,7 @@ Pieces are inline SVG from the current theme through `Icons.piece(kinds, opts)`,
 
 Badges: a health badge at the bottom corner shows `hp`; it is amber when `hp < maxHp`. A small strength badge with a sword mark shows the melee strength when it differs from `hp` and is above 0 (a knight-archer at 6 shows health 6 and strength 3; an archer shows health only). Hybrids show the second kind small at the top corner. A used piece is dimmed; a used piece that may still fire is not dimmed and carries a small bow mark that pulses.
 
-Tap a piece: legal destinations show as soft dots (all reachable squares, diagonal ones too), attack targets as a red ring, fire targets as an orange ring with a bow mark; a Heal button appears when it can heal. After a one-step move of a firing piece, the piece stays selected with its fire targets shown and the panel says it may still fire; tapping elsewhere leaves the fire available until the turn ends.
+Tap a piece: legal destinations show as soft dots (all reachable squares, diagonal ones too), attack targets as a red ring, fire targets as an orange ring with a bow mark; an enemy the piece may both strike and shoot (a hybrid with an archer in it, next to the enemy or two squares away along a row or column) shows the red ring with the bow mark, and a tap on it opens two pills over the enemy, Attack and Fire, so the player chooses; a Heal button appears when it can heal. After a one-step move of a firing piece, the piece stays selected with its fire targets shown and the panel says it may still fire; tapping elsewhere leaves the fire available until the turn ends.
 
 ## Themes
 

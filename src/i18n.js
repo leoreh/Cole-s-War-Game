@@ -95,6 +95,7 @@ window.WarGame = window.WarGame || {};
     'settings.diagonalMoves': 'תנועה באלכסון',
     'settings.rulesNote': 'חל מהמשחק הבא',
     'settings.language': 'שפה',
+    'settings.build': 'גרסה {v}',
 
     'theme.classic': 'קלאסי',
     'theme.heraldic': 'הרלדי',
@@ -267,6 +268,7 @@ window.WarGame = window.WarGame || {};
     'settings.diagonalMoves': 'Diagonal movement',
     'settings.rulesNote': 'Applies at the next new game',
     'settings.language': 'Language',
+    'settings.build': 'Build {v}',
 
     'theme.classic': 'Classic',
     'theme.heraldic': 'Heraldic',

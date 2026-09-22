@@ -3,10 +3,10 @@
    The version string is written by build.py from the hash of the built
    page, so every build gets a cache of its own and the old ones are
    dropped when this worker activates. In the source folder the string
-   stays b0badcdb4d41, which is fine: there the page is many small files
+   stays 05b8646e1c36, which is fine: there the page is many small files
    and only the ones listed here are ever served from the cache. */
 
-var VERSION = 'b0badcdb4d41';
+var VERSION = '05b8646e1c36';
 var CACHE = 'wargame-' + VERSION;
 
 var ASSETS = [
@@ -70,7 +70,10 @@ self.addEventListener('fetch', function (e) {
   e.respondWith(
     caches.open(CACHE).then(function (cache) {
       return cache.match(e.request, { ignoreSearch: true }).then(function (hit) {
-        var live = fetch(e.request).then(function (res) {
+        /* the page is asked for afresh, past the browser's own cache, so
+           the ten minutes GitHub allows it do not add to the wait */
+        var ask = isPage ? new Request(e.request.url, { cache: 'no-cache', credentials: 'same-origin' }) : e.request;
+        var live = fetch(ask).then(function (res) {
           if (res && res.ok) cache.put(e.request, res.clone());
           return res;
         });
