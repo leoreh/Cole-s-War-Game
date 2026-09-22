@@ -164,6 +164,10 @@ deserialize(string) -> state   throws on a bad string, including a 'WG1.' code
 
 # UI
 
+## Title
+
+The game is called Cole's War Game, after Cole, the nephew who designed it, in the manner of "Sid Meier's Civilization". The wordmark is two lines: in English "Cole's" over "War Game"; in Hebrew "משחק מלחמה" over "מבית היוצר של קול". It appears once, as a small wordmark at the top of the panel (the first line in a light weight, the second in the display weight), and in `document.title` ("Cole's War Game" / "משחק מלחמה מבית היוצר של קול"), in the manifest (`name` "Cole's War Game", `short_name` "War Game"), in `apple-mobile-web-app-title` ("Cole's War Game"), in the invite message and in the README. The i18n keys are `app.title1` and `app.title2` for the two lines and `app.title` for the one-line form.
+
 ## One window
 
 There is one window: the board with its panel. No menu screen. On first load a game starts at once (random first player, opening ribbon); on later loads the saved game is shown. Everything else opens from an icon bar in the panel and closes back to the board, so a color change is seen on the real board at once and no screen stands between the player and the game.
@@ -181,6 +185,16 @@ Drawers slide in from the inline end in landscape and up from the bottom in port
 The look of the panel is tight and professional: one type size for controls, one accent color, equal spacing, icon buttons in one row with a hairline separator above them, no decorative text. Under 600 px the panel is a compact bar under the board: the turn line and chips in one row, End turn and Undo in one row, the icon bar in one row.
 
 The invite link is the constant `GAME_URL = 'https://leoreh.github.io/Cole-s-War-Game/'` in `ui.js`, never `location.href`, so it is right even from `file://`.
+
+## Wordmark
+
+The game is called Cole's War Game, after Cole, the nephew who designed it, in the manner of Sid Meier's Civilization. The wordmark is two lines. English: `Cole's` as a small credit line over `War Game` as the large title. Hebrew: `משחק מלחמה` as the large title over `מבית היוצר של קול` as the small credit line under it; the order is reversed because the credit reads as a byline in Hebrew, and the credit is never shortened to `של קול`, since `קול` alone means voice.
+
+Where it appears: at the top of the panel on the board window, once, the main placement; at the top of the Rules sheet, larger, as a title card; in `document.title` (`Cole's War Game` / `משחק מלחמה מבית היוצר של קול`); in the manifest (`name` Cole's War Game, `short_name` War Game, since iOS truncates home-screen labels) while `apple-mobile-web-app-title` stays `War Game`, because on iOS that meta wins over the manifest and the home-screen label would truncate; and as the first line of the invite message.
+
+It is a display treatment, not a text label: built from system fonts with weight, letter spacing and size contrast between the two lines, and a treatment per theme so the title changes with the appearance (CSS only: gradients, text-shadow, `background-clip: text`, keyframes; no images, no external fonts, no measurable cost on an iPad). One short entrance effect on first render and on theme change, a fade with a slight rise or a sheen sweep, 300 to 500 ms, off under the animations setting and `prefers-reduced-motion`.
+
+Strings through i18n: `app.title1` and `app.title2` for the two lines in their display order, `app.title` for the one-line form. RTL holds: the Hebrew wordmark right-aligned, the English left-aligned, the board never mirrors. The panel must not grow so much that the board shrinks on an iPad in landscape or on a phone.
 
 ## Board and pieces
 
@@ -209,10 +223,10 @@ get(id) -> {
 
 Glyphs use `currentColor` for the owner color and `var(--piece-outline)` for the contrasting outline; fixed accents (steel, wood, skin, leather, glow) are allowed as long as they read on both a light and a dark owner color. Each theme's three glyphs share one style and one line weight; hybrids compose the main glyph with the second kind small at the top corner, the same way for every theme.
 
-- Classic: the current heraldic emblem set (shield with crossed swords, horse head, bow with arrow), refined. Board: dark wood frame with a subtle grain and brass corners, squares with a faint grain.
+- Classic: a chess set, every piece turned on the same foot and plinth: the soldier a pawn, the knight the chess horse head, the archer the same turned body under a fletched arrow. No two themes share a silhouette. Board: dark wood frame with a subtle grain and brass corners, squares with a faint grain.
 - Heraldic: people. Soldier: a standing figure with a helmet, a sword and a shield, tabard in the owner color. Knight: a mounted rider on a horse, lance or sword raised, caparison in the owner color. Archer: a figure drawing a longbow, hood and tunic in the owner color. Readable at 48 px, detailed at 90 px. Board: parchment squares with faint map-like hatching on the light ones, a tapestry-like border with a repeating motif, a soft vignette.
-- Ink: brush-like glyphs, as if painted with a wet brush in one or two strokes, slightly rough edges, on a paper board with a brushed frame and a faint paper grain.
-- Neon: glowing outlines (no fill, stroke in the owner color with a glow) on a dark board of dark tiles with thin glowing grid lines; palette with a cyan and a magenta player and near-black squares.
+- Ink: brush-like glyphs, as if painted with a wet brush in one or two strokes, slightly rough edges (a great helm with a crest, a galloping horse, a bow), on a paper board with a brushed frame and a faint paper grain.
+- Neon: glowing outlines (no fill, stroke in the owner color with a glow) in one angular sign language (a faceted shield with a spear, a straight-lined horse head, a two-limbed bow) on a dark board of dark tiles with thin glowing grid lines; palette with a cyan and a magenta player and near-black squares.
 - Toy: chunky, rounded, friendly pieces like wooden board-game tokens: a meeple with a little shield, a rocking-horse knight, a meeple with a bow; bold outlines, simple shapes, a highlight spot. Board: a bright frame with rounded corners and a dotted border, squares with a soft inner highlight, a playful gradient background.
 
 `Icons.piece(kinds, opts)` takes `opts.theme` (an id) and uses that theme's `glyph`; with no theme or an unknown id it uses `classic`. `Icons.glyph(kind, opts)` likewise. All decoration is CSS gradients and inline SVG `data:` URIs under `.theme-<id>`; the user's square colors stay the base color of each square, decoration is an overlay at low opacity. Choosing a theme applies its palette. Picking a color, a preset or a theme switches the random board off.
@@ -237,7 +251,7 @@ Defaults come from the Classic theme's palette: player 0 `#efe6cf`, player 1 `#2
 
 ## Language and direction
 
-`document.documentElement.lang` and `dir` follow the language (`he` / `rtl`, `en` / `ltr`). Default on first run: Hebrew when `navigator.language` starts with `he`, else English. All layout uses logical properties. Numbers and codes are wrapped in `<bdi>` or `dir="ltr"` spans. Directional icons flip in RTL. The Hebrew must read like native Hebrew; the terms of version 1 stay (Soldier חייל, Knight אביר, Archer קשת, Strength כוח, Move תנועה, Attack תקיפה, Fire ירי, Heal ריפוי, Merge מיזוג, Hybrid כלאיים, Turn תור, End turn סיום תור, Undo ביטול, Player שחקן, Winner המנצח, Draw תיקו, Rules חוקים, Settings הגדרות, New game משחק חדש, Menu תפריט, Language שפה, Board לוח, Colors צבעים, Game name משחק מלחמה), with these added: Health בריאות, Theme ערכת נושא, Classic קלאסי, Heraldic הרלדי, Ink דיו, Neon ניאון, Toy צעצוע, Appearance מראה, Transfer העברה, Resume חזרה למשחק, Invite הזמנה, Share this game שיתוף המשחק הזה, Diagonal movement תנועה באלכסון, May still fire יכול עדיין לירות, Applies at the next new game חל מהמשחק הבא.
+`document.documentElement.lang` and `dir` follow the language (`he` / `rtl`, `en` / `ltr`). Default on first run: Hebrew when `navigator.language` starts with `he`, else English. All layout uses logical properties. Numbers and codes are wrapped in `<bdi>` or `dir="ltr"` spans. Directional icons flip in RTL. The Hebrew must read like native Hebrew; the terms of version 1 stay (Soldier חייל, Knight אביר, Archer קשת, Strength כוח, Move תנועה, Attack תקיפה, Fire ירי, Heal ריפוי, Merge מיזוג, Hybrid כלאיים, Turn תור, End turn סיום תור, Undo ביטול, Player שחקן, Winner המנצח, Draw תיקו, Rules חוקים, Settings הגדרות, New game משחק חדש, Menu תפריט, Language שפה, Board לוח, Colors צבעים, Game name משחק מלחמה, Cole's War Game משחק מלחמה מבית היוצר של קול), with these added: Health בריאות, Theme ערכת נושא, Classic קלאסי, Heraldic הרלדי, Ink דיו, Neon ניאון, Toy צעצוע, Appearance מראה, Invite הזמנה, Share this game שיתוף המשחק הזה, Game code קוד המשחק, Load a game טעינת משחק, Share this game שיתוף המשחק הזה, Diagonal movement תנועה באלכסון, May still fire יכול עדיין לירות, Applies at the next new game חל מהמשחק הבא.
 
 ## iPad and iPhone
 
@@ -245,7 +259,7 @@ Defaults come from the Classic theme's palette: player 0 `#efe6cf`, player 1 `#2
 
 ## Install
 
-`src/manifest.webmanifest`: name War Game, short_name War Game, `start_url` `./`, `scope` `./`, `display` standalone, `background_color` `#141821`, `theme_color` `#141821`, icons `icons/icon-192.png`, `icons/icon-512.png` (purpose any and maskable). `index.html` links it with `<link rel="manifest" href="manifest.webmanifest">` and `<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">` (180 px). `dev/make_icons.py` draws the three PNGs with Pillow into `docs/icons/`: a rounded dark square `#1d2233` with the classic shield-and-crossed-swords emblem in cream `#efe6cf`, with a safe margin of 15 percent for the maskable form. The `docs/icons` folder is committed (the build does not regenerate icons).
+`src/manifest.webmanifest`: name War Game, short_name War Game, `start_url` `./`, `scope` `./`, `display` standalone, `background_color` `#141821`, `theme_color` `#141821`, icons `icons/icon-192.png`, `icons/icon-512.png` (purpose any and maskable). `index.html` links it with `<link rel="manifest" href="manifest.webmanifest">` and `<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">` (180 px). `dev/make_icons.py` draws the three PNGs with Pillow into `docs/icons/`: a rounded dark square `#1d2233` with the classic chess knight on its base in cream `#efe6cf`, with a safe margin of 15 percent for the maskable form. The `docs/icons` folder is committed (the build does not regenerate icons).
 
 ## Offline
 

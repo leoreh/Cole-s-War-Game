@@ -1,7 +1,7 @@
 {
-  "name": "War Game",
+  "name": "Cole's War Game",
   "short_name": "War Game",
-  "description": "A board game for two players on one device.",
+  "description": "Cole's War Game: a board game for two players on one device.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

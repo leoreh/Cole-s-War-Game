@@ -11,7 +11,7 @@
 <meta name="format-detection" content="telephone=no">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#141821">
-<title>War Game</title>
+<title>Cole's War Game</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="icons/icon-192.png">
@@ -21,8 +21,8 @@
    Logical properties everywhere, so the interface mirrors in Hebrew.
    The board itself is always direction: ltr and never mirrors.
 
-   Order: tokens, shell, stage and board, pieces, marks, panel, overlays
-   (menu card, rules sheet, settings drawer, dialogs), form widgets,
+   Order: tokens, shell, stage and board, pieces, marks, panel with its
+   icon bar, overlays (drawers, sheets, dialogs), form widgets,
    EFFECTS (the animations), THEME SHELL (the tone of the page and the
    panel per theme), THEME DECORATION (the board of each theme),
    motion switches.
@@ -109,14 +109,11 @@
 
   /* room the panel takes beside the board and under it */
   --side-space: 330px;
-  --below-space: 250px;
+  --below-space: 268px;
 
   --ov-fast: 0.16s;
   --ov-slow: 0.23s;
 }
-
-/* with no game running the board has the whole stage to itself */
-body.no-game { --side-space: 48px; --below-space: 48px; }
 
 * { box-sizing: border-box; }
 
@@ -186,7 +183,9 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.35),
     0 6px 16px -7px var(--accent-soft);
 }
-.btn--primary:hover { filter: brightness(1.12); }
+/* the hover of .btn is a pseudo-class and outweighs a plain class, so the
+   filled buttons say their own background again */
+.btn--primary:hover { background: var(--accent); filter: brightness(1.12); }
 .btn--heal {
   background: var(--heal);
   color: #06231a;
@@ -195,6 +194,7 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
     0 6px 16px -7px rgba(79, 195, 140, 0.8);
 }
+.btn--heal:hover { background: var(--heal); filter: brightness(1.08); }
 .btn--wide { inline-size: 100%; }
 .btn--small { min-block-size: 38px; padding: 0.42em 0.85em; font-size: 0.92rem; }
 .btn--small.is-on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
@@ -216,6 +216,8 @@ body {
   cursor: pointer;
   transition: background 0.15s ease, transform 0.12s ease;
 }
+/* five of them share the bar under the panel, all the same width */
+.iconbtn--bar { flex: 1 1 0; inline-size: auto; min-inline-size: 0; block-size: 40px; }
 .iconbtn:hover { background: var(--soft-2); transform: translateY(-1px); }
 .iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .iconbtn svg { inline-size: 21px; block-size: 21px; display: block; }
@@ -341,10 +343,6 @@ body {
   mix-blend-mode: var(--board-over-blend, normal);
   opacity: var(--board-over-op, 1);
 }
-
-/* with no game on it the board is only a backdrop */
-body.no-game .board { pointer-events: none; }
-body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
 
 /* coordinates */
 .coord {
@@ -646,10 +644,174 @@ body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
   line-height: 1.35;
 }
 
-.panel-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.panel-actions .btn { flex: 1 1 45%; }
-.panel-actions .btn--primary { flex: 1 1 100%; }
+.panel-bottom { display: flex; flex-direction: column; gap: 10px; }
+
+.panel-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.panel-actions .btn { flex: 1 1 0; min-inline-size: 0; }
 .panel-actions .btn--heal { flex: 1 1 100%; }
+
+/* the five icons in one row, a hairline above them */
+.iconbar {
+  display: flex;
+  gap: 8px;
+  padding-block-start: 10px;
+  border-block-start: 1px solid var(--line);
+}
+
+/* ------------------------------------------------------- the wordmark -- */
+/* Cole's War Game set as a title, not as a label: two lines of system type
+   that differ in size, weight and tracking, a fill clipped to the letters
+   that every theme rewrites through the --wm tokens, and one short entrance
+   on the first render and on a change of theme or of language.
+   Which line is the title and which the credit is decided by ui.js, because
+   English reads the credit over the name and Hebrew reads it under it. */
+
+.wordmark {
+  --wm-title: 1.62rem;
+  --wm-credit: 0.66rem;
+  --wm-fill: linear-gradient(178deg, var(--fg) 8%, var(--muted) 116%);
+  --wm-glow: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+  --wm-credit-fg: var(--muted);
+  --wm-sheen: linear-gradient(104deg,
+    rgba(255, 255, 255, 0) 42%,
+    rgba(255, 255, 255, 0.72) 50%,
+    rgba(255, 255, 255, 0) 58%);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;   /* the start edge: left in English, right in Hebrew */
+  gap: 1px;
+  line-height: 1.05;
+  text-align: start;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.wm-line { display: block; white-space: nowrap; }
+
+/* the large line: the fill is clipped to the letters and the sheen, parked
+   off the word, rides over it once at the entrance */
+.wm-title {
+  font-size: var(--wm-title);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  background-image: var(--wm-sheen), var(--wm-fill);
+  background-size: 220% 100%, 100% 100%;
+  background-position: -150% 0, 0 0;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: var(--wm-glow);
+  padding-block-end: 0.08em;      /* the descenders keep their room */
+}
+
+.wm-credit {
+  font-size: var(--wm-credit);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--wm-credit-fg);
+}
+
+/* Hebrew has no case and its letters want no tightening */
+[lang="he"] .wm-title { letter-spacing: 0; }
+[lang="he"] .wm-credit {
+  /* Hebrew has no capitals to carry a small line, so it reads a little larger */
+  font-size: calc(var(--wm-credit) * 1.16);
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-weight: 600;
+}
+
+/* over the panel, under a hairline, the way the icon bar sits over one */
+.wordmark--panel {
+  padding-block-end: 10px;
+  border-block-end: 1px solid var(--line);
+}
+
+/* the title card of the rules sheet */
+.wordmark--card {
+  --wm-title: 2.5rem;
+  --wm-credit: 0.8rem;
+  gap: 3px;
+  margin-block-end: 18px;
+}
+
+/* the entrance: the block rises, the credit follows it, the sheen crosses
+   the title once. Both motion switches turn all three off. */
+.wordmark.is-in { animation: wmRise 380ms cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.wordmark.is-in .wm-credit { animation: wmFade 300ms ease-out 140ms both; }
+.wordmark.is-in .wm-title { animation: wmSheen 420ms ease-out 70ms both; }
+
+@keyframes wmRise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes wmFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes wmSheen {
+  from { background-position: -150% 0, 0 0; }
+  to { background-position: 250% 0, 0 0; }
+}
+
+/* --- one treatment per theme, tokens only ------------------------------ */
+
+/* classic: brass letters cut into walnut */
+body.theme-classic .wordmark {
+  --wm-fill: linear-gradient(177deg, #fff3cd 0%, #e8c06e 38%, #b2802b 66%, #f4dda1 100%);
+  --wm-glow: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.6)) drop-shadow(0 3px 7px rgba(0, 0, 0, 0.45));
+  --wm-credit-fg: #c6a067;
+}
+
+/* heraldic: a book face, and the only theme whose page is dark while its
+   cards are parchment, so the panel wears gold and the card wears wine */
+body.theme-heraldic .wordmark {
+  --wm-fill: linear-gradient(177deg, #f8e6b4 0%, #dcb465 44%, #a97c22 74%, #f3dfa8 100%);
+  --wm-glow: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.55));
+  --wm-credit-fg: #cfa05a;
+  --wm-sheen: linear-gradient(104deg,
+    rgba(255, 255, 255, 0) 42%, rgba(255, 255, 255, 0.72) 50%, rgba(255, 255, 255, 0) 58%);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+body.theme-heraldic .wordmark--card {
+  --wm-fill: linear-gradient(177deg, #a82c2c 0%, #7d1c1c 52%, #5b1111 100%);
+  --wm-glow: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.7));
+  --wm-credit-fg: #8a6224;
+  --wm-sheen: linear-gradient(104deg,
+    rgba(255, 222, 150, 0) 42%, rgba(255, 222, 150, 0.75) 50%, rgba(255, 222, 150, 0) 58%);
+}
+
+/* ink: one black stroke on paper */
+body.theme-ink .wordmark {
+  --wm-fill: linear-gradient(177deg, #24252b 0%, #101116 100%);
+  --wm-glow: none;
+  --wm-credit-fg: #6f6e67;
+  --wm-sheen: linear-gradient(104deg,
+    rgba(255, 255, 255, 0) 42%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0) 58%);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+body.theme-ink .wm-title { letter-spacing: 0.005em; }
+
+/* neon: a lit sign over the board */
+body.theme-neon .wordmark {
+  --wm-fill: linear-gradient(177deg, #ffffff 0%, #b9fbff 30%, #37f0ff 62%, #ff4fd8 100%);
+  --wm-glow: drop-shadow(0 0 5px rgba(55, 240, 255, 0.85))
+             drop-shadow(0 0 16px rgba(55, 240, 255, 0.45));
+  --wm-credit-fg: #7fd8ff;
+}
+
+/* toy: a sticker with a hard shadow */
+body.theme-toy .wordmark {
+  --wm-fill: linear-gradient(177deg, #ff9cb8 0%, #ff6b8a 52%, #ec4a72 100%);
+  --wm-glow: drop-shadow(2px 3px 0 rgba(45, 42, 70, 0.9));
+  --wm-credit-fg: #6a5fd0;
+}
+body.theme-toy .wm-title { letter-spacing: 0.005em; }
+body.theme-toy .wm-credit { letter-spacing: 0.2em; }
 
 /* ------------------------------------------------- portrait and phone -- */
 
@@ -669,8 +831,7 @@ body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
 
 /* a phone: the board takes the width, the panel is a bar under it */
 @media (max-width: 600px) {
-  :root { --below-space: 200px; }
-  body.no-game { --below-space: 30px; }
+  :root { --below-space: 212px; }
   .stage { flex-direction: column; gap: 6px; padding: 4px; }
   .board-wrap {
     --board-size: max(160px, min(calc(var(--vw) - 8px), calc(var(--vh) - var(--below-space))));
@@ -683,25 +844,50 @@ body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
     max-inline-size: none;
     gap: 6px;
   }
-  .panel-top { gap: 6px; }
-  .turn-line { padding: 6px 9px; border-radius: 11px; font-size: 0.92rem; }
+  /* the wordmark shrinks and holds the first row on its own */
+  .wordmark--panel {
+    --wm-title: 1.18rem;
+    --wm-credit: 0.54rem;
+    flex: 1 1 100%;
+    padding-block-end: 6px;
+  }
+  .wordmark--card { --wm-title: 1.85rem; --wm-credit: 0.72rem; margin-block-end: 14px; }
+
+  /* row one: the turn line with the chips beside it. The two bases add up
+     to less than the row, gap included, so they never wrap apart; the chips
+     keep the glyph alone, the one the piece wears on the board */
+  .panel-top { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .turn-line {
+    flex: 1 1 44%;
+    min-inline-size: 0;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 11px;
+    font-size: 0.92rem;
+  }
+  .turn-line .swatch { inline-size: 1.05em; block-size: 1.05em; border-radius: 5px; }
+  .turn-number { font-size: 0.82rem; }
+  /* the turn line stays one line: a long name is cut, never folded */
+  .turn-name,
+  .turn-number { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .iconbtn { inline-size: 32px; block-size: 32px; }
-  .combo { flex-direction: row; gap: 10px; flex-wrap: wrap; }
-  .combo-label { min-inline-size: 0; }
-  .chip { font-size: 0.78rem; padding: 2px 8px 2px 4px; }
-  [dir="rtl"] .chip { padding: 2px 4px 2px 8px; }
-  .chip-ico { inline-size: 1.4em; block-size: 1.4em; }
-  .panel-msg { font-size: 0.82rem; min-block-size: 1.1em; }
+  .iconbtn--bar { inline-size: auto; block-size: 36px; }
+  .combo { flex: 1 1 48%; min-inline-size: 0; flex-direction: row; gap: 10px; flex-wrap: wrap; }
+  .combo-label { min-inline-size: 0; font-size: 0.78rem; }
+  .chip { font-size: 0.78rem; padding: 2px 5px; }
+  .chip:not(.chip--dim) > span:not(.chip-ico) { display: none; }
+  .chip-ico { inline-size: 1.5em; block-size: 1.5em; }
+  .panel-msg { flex: 1 1 100%; font-size: 0.82rem; min-block-size: 1.1em; }
+  /* row two: End turn and Undo. row three: the icons */
+  .panel-bottom { gap: 6px; }
   .panel-actions { gap: 6px; }
-  .panel-actions .btn,
-  .panel-actions .btn--primary,
-  .panel-actions .btn--heal {
-    flex: 1 1 22%;
+  .panel-actions .btn {
     min-block-size: 40px;
     padding: 0.4em 0.5em;
     font-size: 0.88rem;
     border-radius: 10px;
   }
+  .iconbar { gap: 6px; padding-block-start: 6px; }
 }
 
 /* ---------------------------------------------------------- overlays --- */
@@ -722,48 +908,15 @@ body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
 }
 .overlay.is-open { opacity: 1; }
 .overlay[hidden] { display: none; }
-/* the menu waits behind a sheet, a drawer or a dialog opened from it */
-.overlay--menu.is-under { opacity: 0; pointer-events: none; }
 
-/* the card of the menu and the dialogs */
-.card-pop,
+/* the cards: the question, the merge, the game over */
 .dialog {
   transform: translateY(12px) scale(0.965);
   transition: transform var(--ov-slow) cubic-bezier(0.18, 0.9, 0.28, 1.08);
 }
-.overlay.is-open .card-pop,
 .overlay.is-open .dialog { transform: none; }
 
-.menu {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  inline-size: min(380px, 100%);
-  max-block-size: 100%;
-  overflow-y: auto;
-  text-align: center;
-  background: var(--card-bg);
-  border: 1px solid var(--line);
-  border-radius: calc(var(--r-card) + 2px);
-  padding: 22px 20px;
-  box-shadow: var(--ov-shadow);
-}
-.menu-title {
-  margin: 0;
-  font-size: clamp(1.7rem, 6vw, 2.6rem);
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  color: var(--title-fg, var(--fg));
-  text-shadow: var(--title-shadow, none);
-}
-.menu-buttons { display: flex; flex-direction: column; gap: 10px; }
-.menu-buttons[hidden] { display: none; }
-.menu-confirm { display: flex; flex-direction: column; gap: 10px; }
-.menu-confirm[hidden] { display: none; }
-.menu-confirm p { margin: 0 0 2px; color: var(--muted); font-size: 0.95rem; }
-
-/* the rules sheet */
+/* the rules sheet and the share sheet */
 .overlay--sheet { padding: 12px; }
 .sheet {
   inline-size: min(760px, 100%);
@@ -791,6 +944,15 @@ body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
   flex: 0 0 auto;
 }
 .sheet-head h2 { margin: 0; font-size: 1.1rem; flex: 1 1 auto; }
+
+/* the line a sheet answers in: it takes no room until there is a word */
+.sheet-foot {
+  flex: 0 0 auto;
+  padding: 9px 18px;
+  border-block-start: 1px solid var(--line);
+  text-align: start;
+}
+.sheet-foot:empty { display: none; }
 
 .doc-body {
   flex: 1 1 auto;
@@ -838,8 +1000,8 @@ body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
 }
 .combo-plus { color: var(--muted); }
 
-/* the settings drawer: from the inline end in landscape, from the bottom
-   in portrait, always over the panel and never over the whole board */
+/* the drawers: from the inline end in landscape, from the bottom in
+   portrait, always over the panel and never over the whole board */
 .overlay--drawer {
   padding: 0;
   align-items: stretch;
@@ -945,35 +1107,30 @@ body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
   font-variant-numeric: tabular-nums;
 }
 
-.invite-text {
-  text-align: start;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-block-size: 40vh;
-  overflow-y: auto;
-  margin: 0;
-}
+/* the small card the New game icon asks in */
+.dialog--ask { inline-size: min(390px, 100%); }
+.dialog--ask .btn { flex: 1 1 0; min-inline-size: 0; padding-inline: 0.7em; }
+
 .row--center { justify-content: center; }
 
 /* --------------------------------------------------- the form widgets -- */
 
-.card {
-  background: var(--soft);
-  border: 1px solid var(--line);
-  border-radius: var(--r-btn);
-  padding: 14px;
-  margin-block-end: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+/* one group of the drawers and of the share sheet: a quiet label over
+   its controls, the same spacing everywhere */
+.group { display: flex; flex-direction: column; gap: 10px; }
+.group + .group {
+  margin-block-start: 18px;
+  padding-block-start: 18px;
+  border-block-start: 1px solid var(--line);
 }
-.card h3 { margin: 0; font-size: 1rem; color: var(--fg); }
-.card h4 {
-  margin: 0.3em 0 -0.2em;
+.group h4 {
+  margin: 0;
   font-size: 0.82rem;
   font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--muted);
 }
+.group .btn--small { align-self: flex-start; }
 
 .themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 8px; }
 .theme-btn {
@@ -1076,6 +1233,18 @@ body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
   resize: vertical;
   word-break: break-all;
 }
+/* the invite message and the link of this game, for copying by hand */
+.code--text {
+  margin: 0;
+  text-align: start;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-block-size: 34vh;
+  overflow-y: auto;
+}
+.code--short { max-block-size: 5.4em; }
+.code--text { resize: none; }
+
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* =====================================================================
@@ -1499,7 +1668,6 @@ body.theme-ink {
   --fx-heal-num: #2f6b46;
 }
 /* the ink theme writes in a book face, the whole interface with it */
-body.theme-ink .menu-title,
 body.theme-ink .sheet-head h2,
 body.theme-ink .dialog h2,
 body.theme-ink .float,
@@ -1576,7 +1744,6 @@ body.theme-neon .btn--small.is-on {
     inset 0 0 0 1px rgba(255, 255, 255, 0.5),
     0 0 18px -2px rgba(55, 240, 255, 0.8);
 }
-body.theme-neon .menu,
 body.theme-neon .dialog,
 body.theme-neon .sheet,
 body.theme-neon .drawer {
@@ -1910,7 +2077,7 @@ body.theme-toy .frag {
 
 <div id="app">
 
-  <!-- ====================================================== the board -->
+  <!-- ====================================== the board and its panel -->
   <div class="stage">
     <div class="board-wrap">
       <div id="board" class="board">
@@ -1922,31 +2089,18 @@ body.theme-toy .frag {
       </div>
     </div>
 
-    <aside id="panel" class="panel" hidden>
+    <aside id="panel" class="panel">
       <div class="panel-top">
+        <!-- the wordmark: the two lines come from i18n in display order,
+             and ui.js says which of them is the title and which the credit -->
+        <h1 class="wordmark wordmark--panel" id="wm-panel">
+          <span class="wm-line"></span>
+          <span class="wm-line"></span>
+        </h1>
         <div class="turn-line">
           <span id="turn-swatch" class="swatch"></span>
           <span id="turn-name" class="turn-name"></span>
           <span id="turn-number" class="turn-number"></span>
-          <button type="button" id="btn-palette" class="iconbtn" data-i18n-title="game.appearance">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-.9.8-1.7 1.7-1.7H16c2.8 0 5-2.2 5-5 0-4-4-7.3-9-7.3z"
-                    fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
-              <circle cx="7.6" cy="12" r="1.25" fill="currentColor"/>
-              <circle cx="9.9" cy="8.1" r="1.25" fill="currentColor"/>
-              <circle cx="14.4" cy="7.7" r="1.25" fill="currentColor"/>
-              <circle cx="17.5" cy="11" r="1.25" fill="currentColor"/>
-            </svg>
-          </button>
-          <button type="button" id="btn-share" class="iconbtn" data-i18n-title="game.share">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <circle cx="18" cy="5.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
-              <circle cx="6" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
-              <circle cx="18" cy="18.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
-              <path d="M8.4 10.8 15.6 6.8 M8.4 13.2 15.6 17.2" fill="none"
-                    stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
-            </svg>
-          </button>
         </div>
         <div class="combo">
           <div class="combo-row">
@@ -1960,57 +2114,68 @@ body.theme-toy .frag {
         </div>
         <p id="panel-msg" class="panel-msg" aria-live="polite"></p>
       </div>
-      <div class="panel-actions">
-        <button type="button" id="btn-heal" class="btn btn--heal" data-i18n="action.heal" hidden></button>
-        <button type="button" id="btn-endturn" class="btn btn--primary" data-i18n="game.endTurn"></button>
-        <button type="button" id="btn-undo" class="btn" data-i18n="game.undo"></button>
-        <button type="button" id="btn-gamemenu" class="btn" data-i18n="game.menu"></button>
+
+      <div class="panel-bottom">
+        <div class="panel-actions">
+          <button type="button" id="btn-heal" class="btn btn--heal" data-i18n="action.heal" hidden></button>
+          <button type="button" id="btn-endturn" class="btn btn--primary" data-i18n="game.endTurn"></button>
+          <button type="button" id="btn-undo" class="btn" data-i18n="game.undo"></button>
+        </div>
+
+        <!-- the five icons: everything that is not a move on the board -->
+        <nav class="iconbar">
+          <button type="button" id="btn-newgame" class="iconbtn iconbtn--bar" data-i18n-title="game.newGame">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M12 8.3 V15.7 M8.3 12 H15.7" fill="none" stroke="currentColor"
+                    stroke-width="1.7" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button type="button" id="btn-appearance" class="iconbtn iconbtn--bar" data-i18n-title="game.appearance">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-.9.8-1.7 1.7-1.7H16c2.8 0 5-2.2 5-5 0-4-4-7.3-9-7.3z"
+                    fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+              <circle cx="7.6" cy="12" r="1.25" fill="currentColor"/>
+              <circle cx="9.9" cy="8.1" r="1.25" fill="currentColor"/>
+              <circle cx="14.4" cy="7.7" r="1.25" fill="currentColor"/>
+              <circle cx="17.5" cy="11" r="1.25" fill="currentColor"/>
+            </svg>
+          </button>
+          <button type="button" id="btn-settings" class="iconbtn iconbtn--bar" data-i18n-title="settings.title">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="12" cy="12" r="3.1" fill="none" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M19.3 13.5a7.7 7.7 0 0 0 0-3l1.8-1.4-1.9-3.2-2.1.8a7.7 7.7 0 0 0-2.6-1.5L14.2 3H9.8l-.3 2.2a7.7 7.7 0 0 0-2.6 1.5l-2.1-.8-1.9 3.2 1.8 1.4a7.7 7.7 0 0 0 0 3l-1.8 1.4 1.9 3.2 2.1-.8a7.7 7.7 0 0 0 2.6 1.5l.3 2.2h4.4l.3-2.2a7.7 7.7 0 0 0 2.6-1.5l2.1.8 1.9-3.2z"
+                    fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button type="button" id="btn-rules" class="iconbtn iconbtn--bar" data-i18n-title="rules.title">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M12 11 V16.3" fill="none" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round"/>
+              <circle cx="12" cy="7.9" r="1.15" fill="currentColor"/>
+            </svg>
+          </button>
+          <button type="button" id="btn-share" class="iconbtn iconbtn--bar" data-i18n-title="game.share">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="18" cy="5.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+              <circle cx="6" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+              <circle cx="18" cy="18.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M8.4 10.8 15.6 6.8 M8.4 13.2 15.6 17.2" fill="none"
+                    stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </nav>
       </div>
     </aside>
   </div>
 
-  <!-- ======================================================= the menu -->
-  <div id="ov-menu" class="overlay overlay--menu" hidden>
-    <div class="menu card-pop" role="dialog" aria-modal="true">
-      <h1 class="menu-title" data-i18n="app.title"></h1>
-      <div class="menu-buttons" id="menu-buttons">
-        <button type="button" id="btn-new" class="btn btn--primary btn--wide" data-i18n="menu.newGame"></button>
-        <button type="button" id="btn-resume" class="btn btn--wide" data-i18n="menu.resume" hidden></button>
-        <button type="button" id="btn-rules" class="btn btn--wide" data-i18n="menu.rules"></button>
-        <button type="button" id="btn-settings" class="btn btn--wide" data-i18n="menu.settings"></button>
-        <button type="button" id="btn-invite" class="btn btn--wide" data-i18n="menu.invite"></button>
-      </div>
-      <div class="menu-confirm" id="menu-confirm" hidden>
-        <p data-i18n="menu.confirmNew"></p>
-        <button type="button" id="btn-new-yes" class="btn btn--primary btn--wide" data-i18n="menu.confirmStart"></button>
-        <button type="button" id="btn-new-no" class="btn btn--wide" data-i18n="menu.confirmBack"></button>
-      </div>
-      <div class="lang-switch" id="lang-switch-menu"></div>
-    </div>
-  </div>
-
-  <!-- ====================================================== the rules -->
-  <div id="ov-rules" class="overlay overlay--sheet" hidden>
-    <section class="sheet" role="dialog" aria-modal="true">
-      <header class="sheet-head">
-        <h2 data-i18n="rules.title"></h2>
-        <button type="button" class="iconbtn btn-close" data-close="rules" data-i18n-title="common.close">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M6 6 18 18 M18 6 6 18" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </button>
-      </header>
-      <div id="rules-body" class="doc-body"></div>
-    </section>
-  </div>
-
-  <!-- =================================================== the settings -->
-  <div id="ov-settings" class="overlay overlay--drawer" hidden>
+  <!-- ================================================ the appearance -->
+  <div id="ov-appearance" class="overlay overlay--drawer" hidden>
     <section class="drawer" role="dialog" aria-modal="true">
       <header class="sheet-head">
-        <h2 data-i18n="settings.title"></h2>
-        <button type="button" class="iconbtn btn-close" data-close="settings" data-i18n-title="common.close">
+        <h2 data-i18n="game.appearance"></h2>
+        <button type="button" class="iconbtn btn-close" data-close="appearance" data-i18n-title="common.close">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M6 6 18 18 M18 6 6 18" fill="none" stroke="currentColor"
                   stroke-width="2" stroke-linecap="round"/>
@@ -2018,12 +2183,13 @@ body.theme-toy .frag {
         </button>
       </header>
 
-      <div class="drawer-body" id="settings-body">
-
-        <section class="card" id="card-appearance">
-          <h3 data-i18n="settings.appearance"></h3>
+      <div class="drawer-body" id="appearance-body">
+        <section class="group">
+          <h4 data-i18n="settings.theme"></h4>
           <div class="themes" id="themes"></div>
+        </section>
 
+        <section class="group">
           <h4 data-i18n="settings.colors"></h4>
           <div class="fields">
             <label class="field">
@@ -2043,73 +2209,136 @@ body.theme-toy .frag {
               <input type="color" id="set-dark">
             </label>
           </div>
+        </section>
 
+        <section class="group">
           <h4 data-i18n="settings.presets"></h4>
           <div class="presets" id="presets"></div>
+        </section>
 
+        <section class="group">
           <label class="switch">
             <input type="checkbox" id="set-random">
             <span data-i18n="settings.randomBoard"></span>
           </label>
           <button type="button" id="btn-reshuffle" class="btn btn--small" data-i18n="settings.reshuffle"></button>
-
-          <label class="switch">
-            <input type="checkbox" id="set-anim">
-            <span data-i18n="settings.animations"></span>
-          </label>
           <label class="switch">
             <input type="checkbox" id="set-coords">
             <span data-i18n="settings.coordinates"></span>
           </label>
         </section>
+      </div>
+    </section>
+  </div>
 
-        <section class="card">
-          <h3 data-i18n="settings.rules"></h3>
+  <!-- =================================================== the settings -->
+  <div id="ov-settings" class="overlay overlay--drawer" hidden>
+    <section class="drawer" role="dialog" aria-modal="true">
+      <header class="sheet-head">
+        <h2 data-i18n="settings.title"></h2>
+        <button type="button" class="iconbtn btn-close" data-close="settings" data-i18n-title="common.close">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M6 6 18 18 M18 6 6 18" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </header>
+
+      <div class="drawer-body" id="settings-body">
+        <section class="group">
+          <h4 data-i18n="settings.language"></h4>
+          <div class="lang-switch" id="lang-switch"></div>
+        </section>
+
+        <section class="group">
           <label class="switch">
             <input type="checkbox" id="set-diagmoves">
             <span data-i18n="settings.diagonalMoves"></span>
           </label>
           <p class="note" data-i18n="settings.rulesNote"></p>
+          <label class="switch">
+            <input type="checkbox" id="set-anim">
+            <span data-i18n="settings.animations"></span>
+          </label>
         </section>
-
-        <section class="card">
-          <h3 data-i18n="settings.language"></h3>
-          <div class="lang-switch" id="lang-switch-settings"></div>
-        </section>
-
-        <section class="card">
-          <h3 data-i18n="settings.transfer"></h3>
-          <p class="note" data-i18n="settings.exportHint"></p>
-          <textarea id="export-code" class="code" rows="3" readonly dir="ltr" spellcheck="false"></textarea>
-          <div class="row">
-            <button type="button" id="btn-export" class="btn btn--small" data-i18n="settings.export"></button>
-            <button type="button" id="btn-copy" class="btn btn--small" data-i18n="settings.copy"></button>
-          </div>
-          <p class="note" data-i18n="settings.importHint"></p>
-          <textarea id="import-code" class="code" rows="3" dir="ltr" spellcheck="false"
-                    autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
-          <div class="row">
-            <button type="button" id="btn-import" class="btn btn--small" data-i18n="settings.import"></button>
-            <button type="button" id="btn-paste" class="btn btn--small" data-i18n="settings.paste"></button>
-          </div>
-          <p id="transfer-msg" class="note note--live" aria-live="polite"></p>
-        </section>
-
       </div>
     </section>
   </div>
 
-  <!-- ===================================================== the invite -->
-  <div id="ov-invite" class="overlay" hidden>
-    <div class="dialog" role="dialog" aria-modal="true">
-      <h2 data-i18n="invite.title"></h2>
-      <div class="row row--center" id="invite-tabs">
-        <button type="button" id="btn-invite-game" class="btn btn--small" data-i18n="invite.shareGame" hidden></button>
+  <!-- ====================================================== the rules -->
+  <div id="ov-rules" class="overlay overlay--sheet" hidden>
+    <section class="sheet" role="dialog" aria-modal="true">
+      <header class="sheet-head">
+        <h2 data-i18n="rules.title"></h2>
+        <button type="button" class="iconbtn btn-close" data-close="rules" data-i18n-title="common.close">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M6 6 18 18 M18 6 6 18" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </header>
+      <div class="doc-body">
+        <div class="wordmark wordmark--card" id="wm-rules" aria-hidden="true">
+          <span class="wm-line"></span>
+          <span class="wm-line"></span>
+        </div>
+        <div id="rules-body"></div>
       </div>
-      <pre id="invite-text" class="code invite-text"></pre>
-      <p id="invite-msg" class="note note--live" aria-live="polite"></p>
-      <button type="button" id="btn-invite-copy" class="btn btn--primary btn--wide" data-i18n="invite.copy"></button>
-      <button type="button" class="btn btn--wide" data-close="invite" data-i18n="common.close"></button>
+    </section>
+  </div>
+
+  <!-- ====================================================== the share -->
+  <div id="ov-share" class="overlay overlay--sheet" hidden>
+    <section class="sheet" role="dialog" aria-modal="true">
+      <header class="sheet-head">
+        <h2 data-i18n="game.share"></h2>
+        <button type="button" class="iconbtn btn-close" data-close="share" data-i18n-title="common.close">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M6 6 18 18 M18 6 6 18" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </header>
+
+      <div class="doc-body" id="share-body">
+        <section class="group">
+          <h4 data-i18n="share.invite"></h4>
+          <pre id="invite-text" class="code code--text"></pre>
+          <button type="button" id="btn-invite" class="btn btn--small"></button>
+        </section>
+
+        <section class="group" id="share-game" hidden>
+          <h4 data-i18n="share.shareGame"></h4>
+          <pre id="share-game-text" class="code code--text code--short"></pre>
+          <button type="button" id="btn-share-game" class="btn btn--small"></button>
+        </section>
+
+        <section class="group">
+          <h4 data-i18n="share.code"></h4>
+          <textarea id="export-code" class="code" rows="2" readonly dir="ltr" spellcheck="false"></textarea>
+          <button type="button" id="btn-copy-code" class="btn btn--small" data-i18n="share.copy"></button>
+        </section>
+
+        <section class="group">
+          <h4 data-i18n="share.load"></h4>
+          <textarea id="import-code" class="code" rows="2" dir="ltr" spellcheck="false"
+                    autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
+          <button type="button" id="btn-load-code" class="btn btn--small" data-i18n="share.loadBtn"></button>
+        </section>
+      </div>
+
+      <p id="share-msg" class="note note--live sheet-foot" aria-live="polite"></p>
+    </section>
+  </div>
+
+  <!-- ========================================= the new game question -->
+  <div id="ov-confirm" class="overlay" hidden>
+    <div class="dialog dialog--ask" role="dialog" aria-modal="true">
+      <p data-i18n="game.confirmNew"></p>
+      <div class="row row--center">
+        <button type="button" id="btn-new-yes" class="btn btn--primary" data-i18n="game.confirmStart"></button>
+        <button type="button" id="btn-new-no" class="btn" data-i18n="common.back"></button>
+      </div>
     </div>
   </div>
 
@@ -2130,7 +2359,6 @@ body.theme-toy .frag {
       <div id="over-swatch" class="swatch swatch--big"></div>
       <h2 id="over-title"></h2>
       <button type="button" id="btn-again" class="btn btn--primary btn--wide" data-i18n="over.playAgain"></button>
-      <button type="button" id="btn-over-menu" class="btn btn--wide" data-i18n="game.menu"></button>
     </div>
   </div>
 
@@ -2148,23 +2376,21 @@ window.WarGame = window.WarGame || {};
   /* ---------------------------------------------------------------- Hebrew */
 
   var he = {
-    'app.title': 'משחק מלחמה',
+    /* the wordmark: title1 over title2 as they are drawn, title for one line.
+       In Hebrew the credit is a byline and reads under the name, and it is
+       never cut to 'של קול', which on its own says voice */
+    'app.title': 'משחק מלחמה מבית היוצר של קול',
+    'app.title1': 'משחק מלחמה',
+    'app.title2': 'מבית היוצר של קול',
 
-    'menu.newGame': 'משחק חדש',
-    'menu.resume': 'חזרה למשחק',
-    'menu.rules': 'חוקים',
-    'menu.settings': 'הגדרות',
-    'menu.invite': 'הזמנה',
-    'menu.confirmNew': 'המשחק הנוכחי יאבד.',
-    'menu.confirmStart': 'להתחיל בכל זאת',
-    'menu.confirmBack': 'חזרה',
-
+    'game.newGame': 'משחק חדש',
     'game.endTurn': 'סיום תור',
     'game.undo': 'ביטול',
-    'game.menu': 'תפריט',
     'game.turn': 'תור {n}',
     'game.appearance': 'מראה',
     'game.share': 'שיתוף',
+    'game.confirmNew': 'המשחק הנוכחי יאבד.',
+    'game.confirmStart': 'להתחיל בכל זאת',
 
     'player.0': 'שחקן 1',
     'player.1': 'שחקן 2',
@@ -2210,7 +2436,6 @@ window.WarGame = window.WarGame || {};
     'rules.title': 'חוקים',
 
     'settings.title': 'הגדרות',
-    'settings.appearance': 'מראה',
     'settings.theme': 'ערכת נושא',
     'settings.colors': 'צבעים',
     'settings.p0': 'צבע שחקן 1',
@@ -2222,23 +2447,9 @@ window.WarGame = window.WarGame || {};
     'settings.presets': 'ערכות צבע',
     'settings.animations': 'אנימציות',
     'settings.coordinates': 'קואורדינטות',
-    'settings.rules': 'חוקים',
     'settings.diagonalMoves': 'תנועה באלכסון',
     'settings.rulesNote': 'חל מהמשחק הבא',
     'settings.language': 'שפה',
-    'settings.transfer': 'העברה',
-    'settings.export': 'ייצוא משחק',
-    'settings.import': 'ייבוא משחק',
-    'settings.copy': 'העתקה',
-    'settings.paste': 'הדבקה',
-    'settings.exportHint': 'הקוד של המשחק הנוכחי. אפשר להעתיק אותו ולפתוח את המשחק במכשיר אחר.',
-    'settings.importHint': 'כאן מדביקים קוד של משחק.',
-    'settings.copied': 'הקוד הועתק',
-    'settings.copyFail': 'ההעתקה לא הצליחה, אפשר לסמן את הקוד ולהעתיק ידנית',
-    'settings.imported': 'המשחק נטען',
-    'settings.importBad': 'הקוד אינו תקין',
-    'settings.noGame': 'אין משחק לייצוא',
-    'settings.pasteFail': 'הדפדפן חסם את ההדבקה האוטומטית, אפשר להדביק בשדה ידנית',
 
     'theme.classic': 'קלאסי',
     'theme.heraldic': 'הרלדי',
@@ -2253,14 +2464,21 @@ window.WarGame = window.WarGame || {};
     'preset.rose': 'ורד',
     'preset.night': 'לילה',
 
-    'invite.title': 'הזמנה למשחק',
-    'invite.what': 'משחק מלחמה: משחק לוח לשני שחקנים על מכשיר אחד, בחינם ובלי להתקין כלום.',
+    'invite.what': 'משחק לוח לשני שחקנים על מכשיר אחד, בחינם ובלי להתקין כלום.',
     'invite.howTo': 'כדי לשים את המשחק על מסך הבית: פותחים את הקישור בספארי, מקישים על שיתוף ואז על הוספה למסך הבית.',
-    'invite.shareGame': 'שיתוף המשחק הזה',
-    'invite.gameWhat': 'משחק מלחמה: הקישור הזה פותח את המשחק בדיוק במצב שבו הוא נמצא עכשיו.',
-    'invite.copy': 'העתקה',
-    'invite.copied': 'ההודעה הועתקה',
-    'invite.copyFail': 'ההעתקה לא הצליחה, אפשר לסמן את הטקסט ולהעתיק ידנית',
+    'invite.gameWhat': 'הקישור הזה פותח את המשחק בדיוק במצב שבו הוא נמצא עכשיו.',
+
+    'share.invite': 'הזמנה',
+    'share.shareGame': 'שיתוף המשחק הזה',
+    'share.code': 'קוד המשחק',
+    'share.load': 'טעינת משחק',
+    'share.copy': 'העתקה',
+    'share.loadBtn': 'טעינה',
+    'share.copiedText': 'ההודעה הועתקה',
+    'share.copiedCode': 'הקוד הועתק',
+    'share.copyFail': 'ההעתקה לא הצליחה, אפשר לסמן את הטקסט ולהעתיק ידנית',
+    'share.loaded': 'המשחק נטען',
+    'share.badCode': 'הקוד אינו תקין',
 
     'common.back': 'חזרה',
     'common.close': 'סגירה',
@@ -2320,23 +2538,19 @@ window.WarGame = window.WarGame || {};
   /* --------------------------------------------------------------- English */
 
   var en = {
-    'app.title': 'War Game',
+    /* the wordmark: title1 over title2 as they are drawn, title for one line */
+    'app.title': "Cole's War Game",
+    'app.title1': "Cole's",
+    'app.title2': 'War Game',
 
-    'menu.newGame': 'New game',
-    'menu.resume': 'Resume',
-    'menu.rules': 'Rules',
-    'menu.settings': 'Settings',
-    'menu.invite': 'Invite',
-    'menu.confirmNew': 'The current game will be lost.',
-    'menu.confirmStart': 'Start anyway',
-    'menu.confirmBack': 'Back',
-
+    'game.newGame': 'New game',
     'game.endTurn': 'End turn',
     'game.undo': 'Undo',
-    'game.menu': 'Menu',
     'game.turn': 'Turn {n}',
     'game.appearance': 'Appearance',
     'game.share': 'Share',
+    'game.confirmNew': 'The current game will be lost.',
+    'game.confirmStart': 'Start anyway',
 
     'player.0': 'Player 1',
     'player.1': 'Player 2',
@@ -2382,7 +2596,6 @@ window.WarGame = window.WarGame || {};
     'rules.title': 'Rules',
 
     'settings.title': 'Settings',
-    'settings.appearance': 'Appearance',
     'settings.theme': 'Theme',
     'settings.colors': 'Colors',
     'settings.p0': 'Player 1 color',
@@ -2394,23 +2607,9 @@ window.WarGame = window.WarGame || {};
     'settings.presets': 'Presets',
     'settings.animations': 'Animations',
     'settings.coordinates': 'Coordinates',
-    'settings.rules': 'Rules',
     'settings.diagonalMoves': 'Diagonal movement',
     'settings.rulesNote': 'Applies at the next new game',
     'settings.language': 'Language',
-    'settings.transfer': 'Transfer',
-    'settings.export': 'Export game',
-    'settings.import': 'Import game',
-    'settings.copy': 'Copy',
-    'settings.paste': 'Paste',
-    'settings.exportHint': 'The code of the current game. Copy it and open it on another device.',
-    'settings.importHint': 'Paste a game code here.',
-    'settings.copied': 'Code copied',
-    'settings.copyFail': 'Copying failed, select the code and copy it by hand',
-    'settings.imported': 'Game loaded',
-    'settings.importBad': 'That code is not valid',
-    'settings.noGame': 'No game to export',
-    'settings.pasteFail': 'The browser gave no access to the clipboard, paste into the field by hand',
 
     'theme.classic': 'Classic',
     'theme.heraldic': 'Heraldic',
@@ -2425,14 +2624,21 @@ window.WarGame = window.WarGame || {};
     'preset.rose': 'Rose',
     'preset.night': 'Night',
 
-    'invite.title': 'Invite',
-    'invite.what': 'War Game: a board game for two players on one device, free and with nothing to install.',
+    'invite.what': 'A board game for two players on one device, free and with nothing to install.',
     'invite.howTo': 'To put it on the home screen: open the link in Safari, tap Share and then Add to Home Screen.',
-    'invite.shareGame': 'Share this game',
-    'invite.gameWhat': 'War Game: this link opens the game exactly at the position it is in now.',
-    'invite.copy': 'Copy',
-    'invite.copied': 'The message was copied',
-    'invite.copyFail': 'Copying failed, select the text and copy it by hand',
+    'invite.gameWhat': 'This link opens the game exactly at the position it is in now.',
+
+    'share.invite': 'Invite',
+    'share.shareGame': 'Share this game',
+    'share.code': 'Game code',
+    'share.load': 'Load a game',
+    'share.copy': 'Copy',
+    'share.loadBtn': 'Load',
+    'share.copiedText': 'The message was copied',
+    'share.copiedCode': 'Code copied',
+    'share.copyFail': 'Copying failed, select the text and copy it by hand',
+    'share.loaded': 'Game loaded',
+    'share.badCode': 'That code is not valid',
 
     'common.back': 'Back',
     'common.close': 'Close',
@@ -2536,9 +2742,10 @@ window.WarGame = window.WarGame || {};
    get(id) -> { id, name: {he, en}, palette: {p0, p1, light, dark},
                 boardClass, glyph(kind, opts) }
 
-   Every theme draws the same three kinds: S soldier (the one with the shield),
-   K knight (the one with the horse), A archer (the one with the bow), so a
-   piece stays the same piece when the theme changes.
+   Every theme draws the same three kinds - S soldier, K knight, A archer -
+   but each draws its own set and no two sets share a silhouette: classic is a
+   turned chess set, heraldic is people, ink is wet brush strokes, neon is a
+   glowing sign, toy is a wooden token.
 
    A glyph takes the owner's color from currentColor and its contrasting
    outline from var(--piece-outline), both set by .piece in style.css. Fixed
@@ -2556,12 +2763,10 @@ window.WarGame = window.WarGame || {};
   'use strict';
 
   /* A glyph that has a facing turns to face the enemy side of the board.
-     Classic keeps the mirrors it was drawn with (the horse head turns left to
-     right, the arrow of the emblem points the other way down the board); the
-     themes whose pieces are people or side-on emblems all turn left to right,
-     because a person mirrored top to bottom stands on his head. */
+     Every set turns left to right: its pieces stand on a foot or on two legs,
+     and a piece mirrored top to bottom would stand on its head. The soldiers
+     and the classic archer are symmetric and never turn. */
   var MIRROR_H = 'translate(100,0) scale(-1,1)';
-  var MIRROR_V = 'translate(0,100) scale(1,-1)';
   var SIDE_FLIP = { K: MIRROR_H, A: MIRROR_H };
 
   function build(theme, kind, opts) {
@@ -2584,54 +2789,56 @@ window.WarGame = window.WarGame || {};
   }
 
   /* ===================================================== classic ========= */
-  /* The emblem set of icons.js, kept shape for shape: stroke-width 4, round
-     joins, no hairlines. */
+  /* A chess set. Every piece is turned on a lathe and stands on the same foot
+     and plinth, so the three read as one set across the board: a pawn, the
+     horse head of a chess knight, and a piece whose finial is a fletched arrow.
+     Stroke-width 4, round joins, no hairline detail. */
 
   var C_BODY =
     'fill:currentColor;stroke:var(--piece-outline,#1b1d24);stroke-width:4;' +
     'stroke-linejoin:round;stroke-linecap:round';
   var C_DETAIL = 'fill:var(--piece-outline,#1b1d24);stroke:none';
 
-  function cSword(angle) {
-    return '<g transform="rotate(' + angle + ' 50 50)">' +
-      '<rect x="45.5" y="4" width="9" height="15" rx="4.5"/>' +
-      '<rect x="34" y="17" width="32" height="9" rx="4.5"/>' +
-      '<path d="M44.5,25 H55.5 V82 L50,94 L44.5,82 Z"/>' +
-      '</g>';
-  }
+  /* the foot and the plinth the whole set stands on */
+  var C_BASE =
+    '<path d="M13,90 C13,86 17,83 22,82 H78 C83,83 87,86 87,90 Z"/>' +
+    '<rect x="24" y="71" width="52" height="12" rx="5.5"/>';
 
+  /* Soldier: a pawn. Ball, neck, collar, bell. */
   var C_SOLDIER = '<g style="' + C_BODY + '">' +
-    cSword(38) + cSword(-38) +
-    '<path d="M21,36 H79 V58 C79,75 66,86 50,91 C34,86 21,75 21,58 Z"/>' +
-    '</g>';
+    '<path d="M36,42 C36,56 32,67 26,74 H74 C68,67 64,56 64,42 Z"/>' +
+    '<rect x="31" y="35" width="38" height="9" rx="4.5"/>' +
+    '<rect x="43" y="26" width="14" height="11" rx="3.5"/>' +
+    '<circle cx="50" cy="17" r="13"/>' +
+    C_BASE + '</g>';
 
+  /* Knight: the horse head, shrunk to stand on the plinth like the others. */
   var C_KNIGHT = '<g style="' + C_BODY + '">' +
-    '<path d="M27,91 C24,72 29,54 42,44 C50,38 55,29 56,20 ' +
-    'C56,14 62,12 65,17 C67,20 67,24 66,28 ' +
-    'C71,22 78,23 82,29 C87,37 89,46 89,52 C89,57 85,60 79,60 ' +
-    'L64,60 C58,62 55,66 55,74 L55,91 Z"/></g>' +
-    '<circle cx="74" cy="41" r="3.2" style="' + C_DETAIL + '"/>';
+    '<g transform="translate(-1.3,-8.9) scale(0.91)" style="stroke-width:4.4">' +
+      '<path d="M27,91 C24,72 29,54 42,44 C50,38 55,29 56,20 ' +
+      'C56,14 62,12 65,17 C67,20 67,24 66,28 ' +
+      'C71,22 78,23 82,29 C87,37 89,46 89,52 C89,57 85,60 79,60 ' +
+      'L64,60 C58,62 55,66 55,74 L55,91 Z"/>' +
+      '<circle cx="74" cy="41" r="3.5" style="' + C_DETAIL + '"/></g>' +
+    C_BASE + '</g>';
 
+  /* Archer: the turned body of the set with a fletched arrow for its finial. */
   var C_ARCHER = '<g style="' + C_BODY + '">' +
-    /* the bow's limbs are a shade thicker than the emblem in icons.js, so the
-       arc still reads as a bow and not as an arch at 40 px */
-    '<path d="M16,82 C12,72 11,60 13,48 C16,32 30,22 50,22 ' +
-    'C70,22 84,32 87,48 C89,60 88,72 84,82 ' +
-    'L73,75 C76,66 77,57 75,50 C72,38 63,34 50,34 ' +
-    'C37,34 28,38 25,50 C23,57 24,66 27,75 Z"/>' +
-    '<path d="M19,78 L50,86 L81,78 L81.5,81 L50,89.5 L18.5,81 Z" ' +
-    'style="stroke-width:2.2"/>' +
-    '<path d="M46.5,68 L39,80 L39,71.5 L46.5,61 Z ' +
-    'M53.5,68 L61,80 L61,71.5 L53.5,61 Z" style="stroke-width:2.4"/>' +
-    '<rect x="46.5" y="13" width="7" height="75" rx="3.5"/>' +
-    '<path d="M50,2 L61.5,26 L50,21 L38.5,26 Z"/></g>';
+    '<path d="M45.5,41 L30,46 L34,30 L45.5,24 Z"/>' +
+    '<path d="M54.5,41 L70,46 L66,30 L54.5,24 Z"/>' +
+    '<rect x="45.5" y="16" width="9" height="30" rx="4.5"/>' +
+    '<path d="M50,2 L60,22 L50,17 L40,22 Z"/>' +
+    '<rect x="31" y="44" width="38" height="9" rx="4.5"/>' +
+    '<path d="M36,51 C36,62 32,69 26,74 H74 C68,69 64,62 64,51 Z"/>' +
+    C_BASE + '</g>';
 
   var CLASSIC = make({
     id: 'classic',
     name: { he: 'קלאסי', en: 'Classic' },
     palette: { p0: '#efe6cf', p1: '#2f3550', light: '#efe0c3', dark: '#a97e57' },
     boardClass: 'theme-classic',
-    flip: { K: MIRROR_H, A: MIRROR_V },
+    /* only the knight is cut in profile, so only the knight turns */
+    flip: { K: MIRROR_H },
     shapes: { S: C_SOLDIER, K: C_KNIGHT, A: C_ARCHER }
   });
 
@@ -2652,7 +2859,7 @@ window.WarGame = window.WarGame || {};
   var SHADE = ' fill="#000" fill-opacity=".2" stroke="none"';
   /* a detail on a fixed accent (a visor slit on steel, an eye on a hide) keeps
      a fixed dark, so it does not turn pale on a dark owner */
-  var INK = ' fill="#2b2f38" stroke="none"';
+  var DETAIL = ' fill="#2b2f38" stroke="none"';
   var HOOF = ' fill="#4a2e1e" stroke="none"';
 
   function her(inner) {
@@ -2682,7 +2889,7 @@ window.WarGame = window.WarGame || {};
     '<path d="M49,8 C46,2 52,-1 56,2 C60,6 56,11 51,11 Z"' + OWN + '/>' +
     '<path d="M38,24 C38,12 43,7 50,7 C57,7 62,12 62,24 L62,32 ' +
       'C56,35 44,35 38,32 Z"' + STEEL + '/>' +
-    '<rect x="40" y="19" width="20" height="5" rx="2.4"' + INK + '/>' +
+    '<rect x="40" y="19" width="20" height="5" rx="2.4"' + DETAIL + '/>' +
     /* the shield, in front of everything on that side */
     '<path d="M9,31 H41 V54 C41,68 30,76 25,79 C20,76 9,68 9,54 Z"' + OWN + '/>' +
     '<path d="M25,31 H41 V54 C41,68 30,76 25,79 Z"' + SHADE + '/>' +
@@ -2709,7 +2916,7 @@ window.WarGame = window.WarGame || {};
     '<g' + HIDE + '><path d="M67,12 L65,2 L75,10 Z"/>' +
       '<path d="M63,14 C67,10 73,10 77,14 L87,24 C91,28 90,36 85,37 ' +
       'L71,38 C65,38 61,34 60,28 C59,22 60,17 63,14 Z"/></g>' +
-    '<g' + INK + '><circle cx="74" cy="23" r="2.8"/>' +
+    '<g' + DETAIL + '><circle cx="74" cy="23" r="2.8"/>' +
       '<circle cx="85" cy="30" r="2"/></g>' +
     /* the caparison, the owner color on the horse */
     '<path d="M27,37 H64 L68,52 L66,71 L60,61 L53,71 L46,61 L39,71 ' +
@@ -2728,7 +2935,7 @@ window.WarGame = window.WarGame || {};
     '<circle cx="27" cy="31" r="5.4"' + SKIN + '/>' +
     '<path d="M32,7 C32,2 37,-1 42,0 C47,1 50,5 50,11 L49,18 ' +
       'C44,20 37,20 32,18 Z"' + STEEL + '/>' +
-    '<rect x="34" y="7" width="15" height="4.5" rx="2.2"' + INK + '/>');
+    '<rect x="34" y="7" width="15" height="4.5" rx="2.2"' + DETAIL + '/>');
 
   var H_ARCHER = her(
     /* the bow, then the string it is drawn by */
@@ -2789,27 +2996,37 @@ window.WarGame = window.WarGame || {};
       inner + '</g>';
   }
 
-  /* Soldier: two crossed strokes for the swords, one loaded stroke for the
-     shield over them, so only the four ends show, as on the classic emblem. */
-  function inkSword(angle) {
-    return '<g transform="rotate(' + angle + ' 50 50)">' +
-      '<path d="M50,1 L56,16 V82 L50,97 L44,82 V16 Z"/>' +
-      '<path d="M33,15 L67,19 L66,27 L34,23 Z"/>' +
-      '<path d="M45,0 L55,2 L54,13 L46,12 Z"/></g>';
-  }
-
+  /* Soldier: a great helm and its crest, two loaded strokes. */
   var I_SOLDIER = inkWrap('S',
-    inkSword(38) + inkSword(-38) +
-    '<path d="M21,35 C34,30 66,30 79,35 L79,58 C79,75 67,87 50,94 ' +
-      'C33,87 21,75 21,58 Z"/>');
+    '<path d="M27,32 C27,14 38,4 53,5 C67,6 77,13 79,23 L68,27 ' +
+      'C65,17 55,13 45,18 C38,22 36,28 36,35 Z"/>' +
+    '<path d="M27,46 C27,27 37,17 50,17 C63,17 73,27 73,46 L73,64 ' +
+      'C73,80 63,91 50,97 C37,91 27,80 27,64 Z"/>' +
+    '<g style="fill:var(--piece-outline,#1b1d24);stroke:none">' +
+      '<path d="M31,52 L47,47 L47,59 L31,58 Z"/>' +
+      '<path d="M53,47 L69,52 L69,58 L53,59 Z"/>' +
+      '<path d="M45,66 H56 L54,86 H46 Z"/></g>');
 
-  /* Knight: the horse head in one stroke. */
+  /* Knight: a horse at the gallop, laid down in strokes that run together. */
   var I_KNIGHT = inkWrap('K',
-    '<path d="M25,93 C22,72 28,53 42,43 C50,37 55,28 56,19 ' +
-      'C56,13 62,11 65,16 C67,19 67,23 66,27 ' +
-      'C71,21 79,22 83,28 C88,36 90,46 90,52 C90,58 86,61 79,61 ' +
-      'L64,61 C58,63 55,67 55,75 L55,93 Z"/>' +
-    '<circle cx="75" cy="41" r="3.4" style="fill:var(--piece-outline,#1b1d24);stroke:none"/>');
+    /* the tail, streaming back */
+    '<path d="M33,46 C22,36 11,32 1,35 L1,47 C10,44 21,48 31,57 Z"/>' +
+    /* the two hind legs, thrown out behind */
+    '<path d="M34,59 C26,59 15,62 6,67 L9,76 C18,71 27,67 36,67 Z"/>' +
+    '<path d="M39,64 C30,66 20,71 12,78 L18,85 C25,79 33,75 42,73 Z"/>' +
+    /* the barrel */
+    '<path d="M27,54 C27,44 35,39 48,39 H62 C70,39 75,45 75,54 ' +
+      'C75,63 68,69 56,69 H40 C32,69 27,62 27,54 Z"/>' +
+    /* the two forelegs, reaching forward */
+    '<path d="M62,61 C70,57 81,54 91,55 L92,64 C83,63 74,66 66,70 Z"/>' +
+    '<path d="M57,65 C65,65 76,70 85,77 L79,84 C72,78 63,74 56,73 Z"/>' +
+    /* the neck, then the head with its ear */
+    '<path d="M54,46 C56,36 60,27 67,20 L82,30 C76,37 72,46 71,56 Z"/>' +
+    '<path d="M70,18 L67,8 L77,14 Z"/>' +
+    '<path d="M62,27 C62,18 69,13 76,16 L91,27 C97,31 98,38 92,41 ' +
+      'L83,42 C77,42 72,40 68,37 L63,33 Z"/>' +
+    '<circle cx="76" cy="25" r="3.2" ' +
+      'style="fill:var(--piece-outline,#1b1d24);stroke:none"/>');
 
   /* Archer: the bow in one crescent stroke, the arrow in a second. */
   var I_ARCHER = inkWrap('A',
@@ -2851,24 +3068,25 @@ window.WarGame = window.WarGame || {};
       ';stroke:currentColor;stroke-width:3.4">' + inner + '</g>';
   }
 
+  /* Soldier: a faceted shield with the spear standing beside it. */
   var N_S_PATHS =
-    '<path d="M50,4 V29 M34,16 H66 M50,76 V88"/>' +
-    '<path d="M44,84 L50,96 L56,84"/>' +
-    '<path d="M22,30 H78 V52 C78,67 66,77 50,83 C34,77 22,67 22,52 Z"/>';
+    '<path d="M14,26 L38,18 L62,26 L60,54 L48,76 L38,86 L28,76 L16,54 Z"/>' +
+    '<path d="M78,4 L87,26 L78,21 L69,26 Z"/>' +
+    '<path d="M78,24 V94"/>';
 
+  /* Knight: a horse head cut out of straight lines, a low-polygon sign. */
   var N_K_PATHS =
-    '<path d="M29,90 C26,72 31,55 43,45 C51,39 56,30 57,21 ' +
-      'C57,15 62,13 65,18 C67,21 67,25 66,29 ' +
-      'C71,23 77,24 81,30 C86,38 88,46 88,52 C88,57 84,60 78,60 ' +
-      'L64,60 C58,62 55,66 55,74 L55,90 Z"/>' +
-    '<path d="M73,41 h0.1"/>';
+    '<path d="M30,93 L26,70 L33,51 L45,39 L49,25 L56,7 L63,19 ' +
+      'L76,23 L96,39 L92,50 L74,55 L63,62 L59,78 L60,93 Z"/>' +
+    '<path d="M70,33 h0.1"/>';
 
+  /* Archer: the bow bent into two straight limbs, the arrow on the string. */
   var N_A_PATHS =
-    '<path d="M30,10 C50,26 58,40 58,50 C58,61 50,74 30,90"/>' +
-    '<path d="M30,10 L22,50 L30,90"/>' +
-    '<path d="M22,50 H86"/>' +
-    '<path d="M74,42 L88,50 L74,58"/>' +
-    '<path d="M32,42 L24,46 M32,58 L24,54"/>';
+    '<path d="M30,8 L58,50 L30,92"/>' +
+    '<path d="M30,8 L20,50 L30,92"/>' +
+    '<path d="M20,50 H88"/>' +
+    '<path d="M76,42 L90,50 L76,58"/>' +
+    '<path d="M33,42 L23,47 M33,58 L23,53"/>';
 
   var NEON = make({
     id: 'neon',
@@ -3680,8 +3898,10 @@ window.WarGame = window.WarGame || {};
 </script>
 <script>
 /* =====================================================================
-   ui.js - the board, the overlays, input, animation, settings, storage,
-   the invite and the service worker.
+   ui.js - the board, the panel, the drawers and the sheets that open
+   from its icon bar, input, animation, settings, storage, the invite
+   and the service worker. There is one window and a game is always on
+   the board.
    window.WarGame.UI
    ===================================================================== */
 
@@ -3731,13 +3951,11 @@ window.WarGame = window.WarGame || {};
 
   var G = {
     settings: null,
-    state: null,      /* the game being played, null when none is running */
-    idle: null,       /* the opening position drawn behind the menu */
+    state: null,      /* the game on the board: there is always one */
     history: [],      /* states before each action of the current turn */
     sel: null,        /* id of the selected piece */
     acts: [],         /* its legal actions */
     busy: false,      /* animating: input is blocked */
-    inviteMode: 'app',
     boardClass: ''    /* the theme class now on the board and on <body> */
   };
 
@@ -3942,18 +4160,53 @@ window.WarGame = window.WarGame || {};
       btns[j].classList.toggle('is-on', btns[j].dataset.lang === I18N.current);
     }
 
+    renderWordmark(true);
     renderPresets();
     renderThemes();
     renderRules();
-    renderMenu();
     /* the live lines hold a sentence written in the old language */
     msg('');
-    transferMsg('');
+    shareMsg('');
     renderPieces();
     if (G.state) { renderPanel(); renderMarks(); }
     if (isOpen('merge')) renderMergeDialog();
     if (isOpen('over')) renderOver();
-    if (isOpen('invite')) { renderInvite(); inviteMsg(''); }
+    if (isOpen('share')) renderShare();
+  }
+
+  /* --------------------------------------------------------- wordmark --- */
+
+  /* app.title1 and app.title2 come in the order they are drawn; which of the
+     two is the title and which the credit is a matter of the language, since
+     English reads the credit over the name and Hebrew reads it under it */
+  function wordmarkRoles() {
+    return I18N.current === 'he'
+      ? ['wm-title', 'wm-credit']
+      : ['wm-credit', 'wm-title'];
+  }
+
+  function fillWordmark(node, roles, play) {
+    if (!node) return;
+    var lines = node.getElementsByClassName('wm-line');
+    if (lines.length < 2) return;
+    lines[0].textContent = t('app.title1');
+    lines[1].textContent = t('app.title2');
+    lines[0].className = 'wm-line ' + roles[0];
+    lines[1].className = 'wm-line ' + roles[1];
+    /* one string for a screen reader, whatever the two lines are */
+    node.setAttribute('aria-label', t('app.title'));
+    node.classList.remove('is-in');
+    if (!play || !animOn()) return;
+    void node.offsetWidth;        /* so the entrance starts from the top */
+    node.classList.add('is-in');
+  }
+
+  /* the panel wordmark plays on the first render, on a new language and on a
+     new theme; the one in the rules sheet plays when that sheet opens */
+  function renderWordmark(play) {
+    var roles = wordmarkRoles();
+    fillWordmark(el.wmPanel, roles, play);
+    fillWordmark(el.wmRules, roles, false);
   }
 
   /* --------------------------------------------------------- overlays --- */
@@ -3975,25 +4228,12 @@ window.WarGame = window.WarGame || {};
     void n.offsetWidth;          /* so the transition starts from the closed look */
     n.classList.add('is-open');
     document.body.classList.add('has-overlay');
-    menuUnder();
-  }
-
-  /* the menu card steps back while a sheet, a drawer or a dialog is over it,
-     and comes back when that one closes */
-  function menuUnder() {
-    var m = ov('menu');
-    if (!m) return;
-    var others = ['rules', 'settings', 'invite', 'merge', 'over'];
-    var on = false;
-    for (var i = 0; i < others.length; i++) if (isOpen(others[i])) on = true;
-    m.classList.toggle('is-under', on);
   }
 
   function closeOv(name) {
     var n = ov(name);
     if (!n || n.hidden) return;
     n.classList.remove('is-open');
-    menuUnder();
     n._timer = setTimeout(function () {
       n.hidden = true;
       n._timer = null;
@@ -4001,33 +4241,25 @@ window.WarGame = window.WarGame || {};
     }, 230);
   }
 
+  var OVERLAYS = ['appearance', 'settings', 'rules', 'share', 'confirm',
+    'merge', 'over'];
+
+  /* the ones a tap outside or Escape closes, innermost first */
+  var LIGHT = ['share', 'rules', 'appearance', 'settings', 'confirm'];
+
   function anyOverlayOpen() {
-    var names = ['menu', 'rules', 'settings', 'invite', 'merge', 'over'];
-    for (var i = 0; i < names.length; i++) if (isOpen(names[i])) return true;
+    for (var i = 0; i < OVERLAYS.length; i++) if (isOpen(OVERLAYS[i])) return true;
     return false;
   }
 
-  /* --------------------------------------------------------- the menu --- */
+  /* ------------------------------------------------------- new game ---- */
 
-  function gameInProgress() {
-    return !!(G.state && G.state.winner === null) || hasSavedGame();
-  }
+  function gameOn() { return !!(G.state && G.state.winner === null); }
 
-  function renderMenu() {
-    el.btnResume.hidden = !gameInProgress();
-  }
-
-  function openMenu() {
-    showConfirm(false);
-    renderMenu();
-    openOv('menu');
-  }
-
-  function closeMenu() { closeOv('menu'); }
-
-  function showConfirm(on) {
-    el.menuButtons.hidden = !!on;
-    el.menuConfirm.hidden = !on;
+  /* a game under way is only lost on purpose */
+  function askNewGame() {
+    if (gameOn()) openOv('confirm');
+    else newGame();
   }
 
   /* ------------------------------------------------------- the layout --- */
@@ -4083,8 +4315,7 @@ window.WarGame = window.WarGame || {};
 
   /* -------------------------------------------------------- the pieces -- */
 
-  /* the board is never empty: with no game it shows the opening position */
-  function viewState() { return G.state || G.idle; }
+  function viewState() { return G.state; }
 
   function renderPieces() {
     var st = viewState(), id, p;
@@ -4132,15 +4363,16 @@ window.WarGame = window.WarGame || {};
 
   /* ---------------------------------------------------------- the panel - */
 
+  /* the title carries the name where the compact bar shows the glyph alone */
   function chip(kind, dim) {
-    return '<span class="chip' + (dim ? ' chip--dim' : '') + '">' +
+    var name = esc(t('kind.' + kind));
+    return '<span class="chip' + (dim ? ' chip--dim' : '') + '" title="' + name + '">' +
       '<span class="chip-ico">' + Icons.glyph(kind, { theme: currentTheme() }) + '</span>' +
-      '<span>' + esc(t('kind.' + kind)) + '</span></span>';
+      '<span>' + name + '</span></span>';
   }
 
   function renderPanel() {
     var st = G.state;
-    el.panel.hidden = !st;
     if (!st) return;
     var pl = st.turn.player;
 
@@ -4809,13 +5041,6 @@ window.WarGame = window.WarGame || {};
     try { return localStorage.getItem(GAME_KEY); } catch (e) { return null; }
   }
 
-  /* a version 1 code no longer deserializes, so it counts as no save */
-  function hasSavedGame() {
-    var c = savedCode();
-    if (!c) return false;
-    try { Engine.deserialize(c); return true; } catch (e) { return false; }
-  }
-
   function resetBoardNodes() {
     G.history = [];
     G.sel = null;
@@ -4827,25 +5052,12 @@ window.WarGame = window.WarGame || {};
     clearNode(el.marks);
   }
 
-  /* the board with no game on it: the opening position, dimmed */
-  function showIdleBoard() {
-    G.state = null;
-    G.idle = Engine.newGame({ diagonalMoves: !!G.settings.diagonalMoves }, 0);
-    resetBoardNodes();
-    document.body.classList.add('no-game');
-    el.panel.hidden = true;
-    msg('');
-    render();
-  }
-
   function startGame(state) {
     G.state = state;
     resetBoardNodes();
-    document.body.classList.remove('no-game');
-    el.panel.hidden = false;
     closeOv('merge');
     closeOv('over');
-    closeMenu();
+    closeOv('confirm');
     msg('');
     render();
     remeasure();
@@ -4866,12 +5078,12 @@ window.WarGame = window.WarGame || {};
     });
   }
 
-  function resumeGame() {
-    if (G.state) { closeMenu(); return; }
+  /* a WG1. code no longer deserializes, so an old save is no save */
+  function resumeSaved() {
     var c = savedCode();
-    if (!c) { renderMenu(); return; }
-    try { startGame(Engine.deserialize(c)); }
-    catch (e) { renderMenu(); }
+    if (!c) return false;
+    try { startGame(Engine.deserialize(c)); return true; }
+    catch (e) { return false; }
   }
 
   /* a code may arrive as a bare string or inside a #g=... link */
@@ -4892,15 +5104,55 @@ window.WarGame = window.WarGame || {};
     } catch (e) { return false; }
   }
 
-  /* --------------------------------------------------------- transfer --- */
+  /* ------------------------------------------------------- the share --- */
 
-  function transferMsg(text) { el.transferMsg.textContent = text || ''; }
+  function shareMsg(text) { el.shareMsg.textContent = text || ''; }
 
-  function doExport() {
-    var code = G.state ? Engine.serialize(G.state) : savedCode();
-    if (!code) { transferMsg(t('settings.noGame')); return; }
-    el.exportCode.value = code;
-    copyExport();
+  function canShare() { return typeof navigator.share === 'function'; }
+
+  /* the invite message, and the same message carrying this position */
+  function inviteText(mode) {
+    var head = t('app.title') + '\n';
+    if (mode === 'game' && G.state) {
+      return head + t('invite.gameWhat') + '\n' +
+        GAME_URL + '#g=' + Engine.serialize(G.state) + '\n' +
+        t('invite.howTo');
+    }
+    return head + t('invite.what') + '\n' + GAME_URL + '\n' + t('invite.howTo');
+  }
+
+  /* the link is one run of Latin: a bdi keeps its last slash from jumping
+     to the head of the line in Hebrew */
+  function fillText(node, text) {
+    node.innerHTML = text.split('\n').map(function (line) {
+      return line.indexOf('http') === 0
+        ? '<bdi dir="ltr">' + esc(line) + '</bdi>'
+        : esc(line);
+    }).join('\n');
+  }
+
+  function renderShare() {
+    var on = gameOn();
+    var label = canShare() ? t('game.share') : t('share.copy');
+    fillText(el.inviteText, inviteText('app'));
+    el.btnInvite.textContent = label;
+    /* a finished game is no longer worth sending on */
+    el.shareGame.hidden = !on;
+    if (on) fillText(el.shareGameText, inviteText('game'));
+    el.btnShareGame.textContent = label;
+    el.exportCode.value = G.state ? Engine.serialize(G.state) : '';
+  }
+
+  function openRules() {
+    fillWordmark(el.wmRules, wordmarkRoles(), true);
+    openOv('rules');
+  }
+
+  function openShare() {
+    renderShare();
+    shareMsg('');
+    openOv('share');
+    el.shareBody.scrollTop = 0;   /* a hidden box keeps no scroll, so after */
   }
 
   function copyText(text, onOk, onFail) {
@@ -4911,99 +5163,12 @@ window.WarGame = window.WarGame || {};
     onFail();
   }
 
-  function copyExport() {
-    var code = el.exportCode.value;
-    if (!code) { transferMsg(t('settings.noGame')); return; }
-    copyText(code,
-      function () { transferMsg(t('settings.copied')); },
-      function () {
-        if (legacyCopy(el.exportCode)) transferMsg(t('settings.copied'));
-        else transferMsg(t('settings.copyFail'));
-      });
-  }
-
   function legacyCopy(node) {
     try {
       node.focus();
       node.select();
       return document.execCommand('copy');
     } catch (e) { return false; }
-  }
-
-  function doImport() {
-    var code = cleanCode(el.importCode.value);
-    if (!code) { transferMsg(t('settings.importBad')); return; }
-    var st;
-    try { st = Engine.deserialize(code); }
-    catch (e) { transferMsg(t('settings.importBad')); return; }
-    transferMsg(t('settings.imported'));
-    closeOv('settings');
-    startGame(st);
-  }
-
-  function doPaste() {
-    if (navigator.clipboard && navigator.clipboard.readText) {
-      navigator.clipboard.readText().then(function (text) {
-        el.importCode.value = text;
-        transferMsg('');
-      }, function () {
-        el.importCode.focus();
-        transferMsg(t('settings.pasteFail'));
-      });
-    } else {
-      el.importCode.focus();
-      transferMsg(t('settings.pasteFail'));
-    }
-  }
-
-  /* ----------------------------------------------------------- invite --- */
-
-  function inviteText(mode) {
-    if (mode === 'game' && G.state) {
-      return t('invite.gameWhat') + '\n' +
-        GAME_URL + '#g=' + Engine.serialize(G.state) + '\n' +
-        t('invite.howTo');
-    }
-    return t('invite.what') + '\n' + GAME_URL + '\n' + t('invite.howTo');
-  }
-
-  function renderInvite() {
-    var gameOn = !!(G.state && G.state.winner === null);
-    if (!gameOn) G.inviteMode = 'app';
-    el.inviteGame.hidden = !gameOn;
-    el.inviteGame.classList.toggle('is-on', G.inviteMode === 'game');
-    /* the link is one run of Latin: a bdi keeps its last slash from jumping
-       to the head of the line in Hebrew */
-    el.inviteText.innerHTML = inviteText(G.inviteMode).split('\n')
-      .map(function (line, i) {
-        return i === 1 ? '<bdi dir="ltr">' + esc(line) + '</bdi>' : esc(line);
-      }).join('\n');
-    el.inviteCopy.textContent = canShare() ? t('game.share') : t('invite.copy');
-  }
-
-  function canShare() { return typeof navigator.share === 'function'; }
-
-  function openInvite() {
-    G.inviteMode = 'app';
-    renderInvite();
-    inviteMsg('');
-    /* with no share sheet the text is on the clipboard as soon as the card
-       opens, so one tap is enough */
-    if (!canShare()) copyInvite(true);
-    openOv('invite');
-  }
-
-  function inviteMsg(text) { el.inviteMsg.textContent = text || ''; }
-
-  function copyInvite(quiet) {
-    var text = inviteText(G.inviteMode);
-    copyText(text,
-      function () { inviteMsg(t('invite.copied')); },
-      function () {
-        if (quiet) return;
-        selectNode(el.inviteText);   /* so it can still be copied by hand */
-        inviteMsg(t('invite.copyFail'));
-      });
   }
 
   function selectNode(node) {
@@ -5016,16 +5181,45 @@ window.WarGame = window.WarGame || {};
     } catch (e) { /* selection is a courtesy, not a need */ }
   }
 
-  function shareInvite() {
-    var text = inviteText(G.inviteMode);
+  /* the device's own share sheet when it has one, else the clipboard; with
+     neither, the text is selected so it can still be copied by hand */
+  function sendText(text, node) {
     if (canShare()) {
       try {
         var p = navigator.share({ title: t('app.title'), text: text });
         if (p && p.catch) p.catch(function () { /* the sheet was dismissed */ });
-      } catch (e) { copyInvite(); }
-      return;
+        return;
+      } catch (e) { /* on to the clipboard */ }
     }
-    copyInvite();
+    copyText(text,
+      function () { shareMsg(t('share.copiedText')); },
+      function () {
+        selectNode(node);
+        shareMsg(t('share.copyFail'));
+      });
+  }
+
+  function copyCode() {
+    var code = el.exportCode.value;
+    if (!code) return;
+    copyText(code,
+      function () { shareMsg(t('share.copiedCode')); },
+      function () {
+        if (legacyCopy(el.exportCode)) shareMsg(t('share.copiedCode'));
+        else shareMsg(t('share.copyFail'));
+      });
+  }
+
+  /* a bad code says so and changes nothing */
+  function loadCode() {
+    var code = cleanCode(el.importCode.value), st;
+    if (!code) { shareMsg(t('share.badCode')); return; }
+    try { st = Engine.deserialize(code); }
+    catch (e) { shareMsg(t('share.badCode')); return; }
+    el.importCode.value = '';
+    shareMsg(t('share.loaded'));
+    closeOv('share');
+    startGame(st);
   }
 
   /* ----------------------------------------------------- rules screen --- */
@@ -5085,7 +5279,7 @@ window.WarGame = window.WarGame || {};
     el.rulesBody.innerHTML = out;
   }
 
-  /* -------------------------------------------------- settings drawer --- */
+  /* ------------------------------------------ appearance and settings --- */
 
   function renderPresets() {
     var out = '';
@@ -5124,25 +5318,28 @@ window.WarGame = window.WarGame || {};
     el.themes.innerHTML = out;
   }
 
-  function fillSettingsForm() {
+  function fillAppearanceForm() {
     el.setP0.value = G.settings.p0;
     el.setP1.value = G.settings.p1;
     el.setLight.value = G.settings.sqLight;
     el.setDark.value = G.settings.sqDark;
     el.setRandom.checked = !!G.settings.randomBoard;
-    el.setAnim.checked = !!G.settings.animations;
     el.setCoords.checked = !!G.settings.coordinates;
-    el.setDiagMoves.checked = !!G.settings.diagonalMoves;
-    el.exportCode.value = G.state ? Engine.serialize(G.state) : (savedCode() || '');
     renderThemes();
-    transferMsg('');
   }
 
-  /* every appearance change lands on the board that is already on screen */
+  function fillSettingsForm() {
+    el.setAnim.checked = !!G.settings.animations;
+    el.setDiagMoves.checked = !!G.settings.diagonalMoves;
+  }
+
+  /* every appearance change lands on the board that is already on screen,
+     the panel with it: the swatch and the chips carry the colors too */
   function settingChanged() {
     saveSettings();
     applySettings();
     renderPieces();
+    renderPanel();
     renderThemes();
   }
 
@@ -5154,7 +5351,7 @@ window.WarGame = window.WarGame || {};
         G.settings.sqLight = PRESETS[i].sqLight;
         G.settings.sqDark = PRESETS[i].sqDark;
         G.settings.randomBoard = false;   /* a chosen palette wins over the random one */
-        fillSettingsForm();
+        fillAppearanceForm();
         settingChanged();
         return;
       }
@@ -5171,14 +5368,21 @@ window.WarGame = window.WarGame || {};
       G.settings.sqDark = d.palette.dark;
     }
     G.settings.randomBoard = false;
-    fillSettingsForm();
+    fillAppearanceForm();
     settingChanged();
+    renderWordmark(true);      /* the title wears the theme too */
+  }
+
+  function openAppearance() {
+    fillAppearanceForm();
+    openOv('appearance');
+    el.appearanceBody.scrollTop = 0;
   }
 
   function openSettings() {
     fillSettingsForm();
-    el.settingsBody.scrollTop = 0;
     openOv('settings');
+    el.settingsBody.scrollTop = 0;
   }
 
   /* ------------------------------------------------------ service worker */
@@ -5225,11 +5429,11 @@ window.WarGame = window.WarGame || {};
     el.btnHeal = $('btn-heal');
     el.btnEndTurn = $('btn-endturn');
     el.btnUndo = $('btn-undo');
-    el.btnResume = $('btn-resume');
-    el.menuButtons = $('menu-buttons');
-    el.menuConfirm = $('menu-confirm');
 
+    el.wmPanel = $('wm-panel');
+    el.wmRules = $('wm-rules');
     el.rulesBody = $('rules-body');
+    el.appearanceBody = $('appearance-body');
     el.settingsBody = $('settings-body');
     el.presets = $('presets');
     el.themes = $('themes');
@@ -5242,14 +5446,16 @@ window.WarGame = window.WarGame || {};
     el.setAnim = $('set-anim');
     el.setCoords = $('set-coords');
     el.setDiagMoves = $('set-diagmoves');
+
+    el.shareBody = $('share-body');
+    el.shareMsg = $('share-msg');
+    el.inviteText = $('invite-text');
+    el.btnInvite = $('btn-invite');
+    el.shareGame = $('share-game');
+    el.shareGameText = $('share-game-text');
+    el.btnShareGame = $('btn-share-game');
     el.exportCode = $('export-code');
     el.importCode = $('import-code');
-    el.transferMsg = $('transfer-msg');
-
-    el.inviteText = $('invite-text');
-    el.inviteMsg = $('invite-msg');
-    el.inviteCopy = $('btn-invite-copy');
-    el.inviteGame = $('btn-invite-game');
 
     el.mergePiece = $('merge-piece');
     el.mergeChoices = $('merge-choices');
@@ -5258,30 +5464,26 @@ window.WarGame = window.WarGame || {};
   }
 
   function wire() {
-    /* --- the menu card --- */
-    $('btn-new').addEventListener('click', function () {
-      if (gameInProgress()) showConfirm(true);
-      else newGame();
-    });
-    $('btn-new-yes').addEventListener('click', function () {
-      showConfirm(false);
-      newGame();
-    });
-    $('btn-new-no').addEventListener('click', function () { showConfirm(false); });
-    $('btn-resume').addEventListener('click', resumeGame);
-    $('btn-rules').addEventListener('click', function () { openOv('rules'); });
-    $('btn-settings').addEventListener('click', openSettings);
-    $('btn-invite').addEventListener('click', openInvite);
-
     /* --- the panel --- */
     el.btnEndTurn.addEventListener('click', endTurn);
     el.btnUndo.addEventListener('click', undo);
     el.btnHeal.addEventListener('click', function () {
       if (G.sel) doAction({ type: 'heal', piece: G.sel });
     });
-    $('btn-gamemenu').addEventListener('click', openMenu);
-    $('btn-palette').addEventListener('click', openSettings);
-    $('btn-share').addEventListener('click', openInvite);
+
+    /* --- the icon bar --- */
+    $('btn-newgame').addEventListener('click', askNewGame);
+    $('btn-appearance').addEventListener('click', openAppearance);
+    $('btn-settings').addEventListener('click', openSettings);
+    $('btn-rules').addEventListener('click', openRules);
+    $('btn-share').addEventListener('click', openShare);
+
+    /* --- the new game question --- */
+    $('btn-new-yes').addEventListener('click', function () {
+      closeOv('confirm');
+      newGame();
+    });
+    $('btn-new-no').addEventListener('click', function () { closeOv('confirm'); });
 
     /* --- closing --- */
     var closers = document.querySelectorAll('[data-close]');
@@ -5290,19 +5492,18 @@ window.WarGame = window.WarGame || {};
         closeOv(e.currentTarget.getAttribute('data-close'));
       });
     }
-    /* a tap on the backdrop closes the sheets, never the dialogs */
-    ['rules', 'settings', 'invite'].forEach(function (name) {
+    /* a tap outside closes a drawer, a sheet and the question, never the
+       merge dialog and never the game over card */
+    LIGHT.forEach(function (name) {
       ov(name).addEventListener('click', function (e) {
         if (e.target === ov(name)) closeOv(name);
       });
     });
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
-      var names = ['invite', 'rules', 'settings'];
-      for (var k = 0; k < names.length; k++) {
-        if (isOpen(names[k])) { closeOv(names[k]); return; }
+      for (var k = 0; k < LIGHT.length; k++) {
+        if (isOpen(LIGHT[k])) { closeOv(LIGHT[k]); return; }
       }
-      if (isOpen('menu') && gameInProgress()) closeMenu();
     });
 
     /* --- the board --- */
@@ -5327,9 +5528,8 @@ window.WarGame = window.WarGame || {};
 
     /* --- game over --- */
     $('btn-again').addEventListener('click', function () { closeOv('over'); newGame(); });
-    $('btn-over-menu').addEventListener('click', function () { closeOv('over'); openMenu(); });
 
-    /* --- the settings --- */
+    /* --- the appearance drawer --- */
     el.themes.addEventListener('click', function (e) {
       var b = e.target.closest ? e.target.closest('.theme-btn') : null;
       if (b) applyTheme(b.dataset.theme);
@@ -5372,36 +5572,31 @@ window.WarGame = window.WarGame || {};
       el.setRandom.checked = true;
       settingChanged();
     });
-
-    el.setAnim.addEventListener('change', function () {
-      G.settings.animations = el.setAnim.checked;
-      settingChanged();
-    });
     el.setCoords.addEventListener('change', function () {
       G.settings.coordinates = el.setCoords.checked;
       settingChanged();
     });
+
+    /* --- the settings drawer --- */
+    el.setAnim.addEventListener('change', function () {
+      G.settings.animations = el.setAnim.checked;
+      settingChanged();
+    });
     el.setDiagMoves.addEventListener('change', function () {
       G.settings.diagonalMoves = el.setDiagMoves.checked;
-      saveSettings();
-      if (!G.state) showIdleBoard();   /* the opening board follows at once */
+      saveSettings();      /* the rule itself waits for the next new game */
     });
 
-    $('btn-export').addEventListener('click', doExport);
-    $('btn-copy').addEventListener('click', copyExport);
-    $('btn-import').addEventListener('click', doImport);
-    $('btn-paste').addEventListener('click', doPaste);
-
-    /* --- the invite card --- */
-    el.inviteGame.addEventListener('click', function () {
-      G.inviteMode = G.inviteMode === 'game' ? 'app' : 'game';
-      renderInvite();
-      inviteMsg('');
-      if (!canShare()) copyInvite(true);
+    /* --- the share sheet --- */
+    el.btnInvite.addEventListener('click', function () {
+      sendText(inviteText('app'), el.inviteText);
     });
-    el.inviteCopy.addEventListener('click', function () {
-      if (canShare()) shareInvite(); else copyInvite();
+    el.btnShareGame.addEventListener('click', function () {
+      if (!gameOn()) return;
+      sendText(inviteText('game'), el.shareGameText);
     });
+    $('btn-copy-code').addEventListener('click', copyCode);
+    $('btn-load-code').addEventListener('click', loadCode);
 
     window.addEventListener('resize', remeasure);
     window.addEventListener('orientationchange', function () {
@@ -5426,20 +5621,15 @@ window.WarGame = window.WarGame || {};
     I18N.set(G.settings.lang);
 
     buildSquares();
-    langButtons($('lang-switch-menu'));
-    langButtons($('lang-switch-settings'));
+    langButtons($('lang-switch'));
     wire();
 
     applySettings();
-    showIdleBoard();
     refreshTexts();
 
-    /* a link with a position in it opens that position; a saved game opens
-       straight away; with neither, the menu is over the opening board */
-    if (!loadFromHash()) {
-      if (hasSavedGame()) resumeGame();
-      else openMenu();
-    }
+    /* a link with a position in it opens that position, then a saved game;
+       with neither, a game starts at once */
+    if (!loadFromHash() && !resumeSaved()) newGame();
     remeasure();
     registerSW();
   }
@@ -5453,7 +5643,6 @@ window.WarGame = window.WarGame || {};
   window.WarGame.UI = {
     init: init,
     newGame: newGame,
-    openMenu: openMenu,
     setLang: setLang,
     importCode: function (code) {
       var st = Engine.deserialize(cleanCode(code));

@@ -4,9 +4,10 @@
    get(id) -> { id, name: {he, en}, palette: {p0, p1, light, dark},
                 boardClass, glyph(kind, opts) }
 
-   Every theme draws the same three kinds: S soldier (the one with the shield),
-   K knight (the one with the horse), A archer (the one with the bow), so a
-   piece stays the same piece when the theme changes.
+   Every theme draws the same three kinds - S soldier, K knight, A archer -
+   but each draws its own set and no two sets share a silhouette: classic is a
+   turned chess set, heraldic is people, ink is wet brush strokes, neon is a
+   glowing sign, toy is a wooden token.
 
    A glyph takes the owner's color from currentColor and its contrasting
    outline from var(--piece-outline), both set by .piece in style.css. Fixed
@@ -24,12 +25,10 @@ window.WarGame = window.WarGame || {};
   'use strict';
 
   /* A glyph that has a facing turns to face the enemy side of the board.
-     Classic keeps the mirrors it was drawn with (the horse head turns left to
-     right, the arrow of the emblem points the other way down the board); the
-     themes whose pieces are people or side-on emblems all turn left to right,
-     because a person mirrored top to bottom stands on his head. */
+     Every set turns left to right: its pieces stand on a foot or on two legs,
+     and a piece mirrored top to bottom would stand on its head. The soldiers
+     and the classic archer are symmetric and never turn. */
   var MIRROR_H = 'translate(100,0) scale(-1,1)';
-  var MIRROR_V = 'translate(0,100) scale(1,-1)';
   var SIDE_FLIP = { K: MIRROR_H, A: MIRROR_H };
 
   function build(theme, kind, opts) {
@@ -52,54 +51,56 @@ window.WarGame = window.WarGame || {};
   }
 
   /* ===================================================== classic ========= */
-  /* The emblem set of icons.js, kept shape for shape: stroke-width 4, round
-     joins, no hairlines. */
+  /* A chess set. Every piece is turned on a lathe and stands on the same foot
+     and plinth, so the three read as one set across the board: a pawn, the
+     horse head of a chess knight, and a piece whose finial is a fletched arrow.
+     Stroke-width 4, round joins, no hairline detail. */
 
   var C_BODY =
     'fill:currentColor;stroke:var(--piece-outline,#1b1d24);stroke-width:4;' +
     'stroke-linejoin:round;stroke-linecap:round';
   var C_DETAIL = 'fill:var(--piece-outline,#1b1d24);stroke:none';
 
-  function cSword(angle) {
-    return '<g transform="rotate(' + angle + ' 50 50)">' +
-      '<rect x="45.5" y="4" width="9" height="15" rx="4.5"/>' +
-      '<rect x="34" y="17" width="32" height="9" rx="4.5"/>' +
-      '<path d="M44.5,25 H55.5 V82 L50,94 L44.5,82 Z"/>' +
-      '</g>';
-  }
+  /* the foot and the plinth the whole set stands on */
+  var C_BASE =
+    '<path d="M13,90 C13,86 17,83 22,82 H78 C83,83 87,86 87,90 Z"/>' +
+    '<rect x="24" y="71" width="52" height="12" rx="5.5"/>';
 
+  /* Soldier: a pawn. Ball, neck, collar, bell. */
   var C_SOLDIER = '<g style="' + C_BODY + '">' +
-    cSword(38) + cSword(-38) +
-    '<path d="M21,36 H79 V58 C79,75 66,86 50,91 C34,86 21,75 21,58 Z"/>' +
-    '</g>';
+    '<path d="M36,42 C36,56 32,67 26,74 H74 C68,67 64,56 64,42 Z"/>' +
+    '<rect x="31" y="35" width="38" height="9" rx="4.5"/>' +
+    '<rect x="43" y="26" width="14" height="11" rx="3.5"/>' +
+    '<circle cx="50" cy="17" r="13"/>' +
+    C_BASE + '</g>';
 
+  /* Knight: the horse head, shrunk to stand on the plinth like the others. */
   var C_KNIGHT = '<g style="' + C_BODY + '">' +
-    '<path d="M27,91 C24,72 29,54 42,44 C50,38 55,29 56,20 ' +
-    'C56,14 62,12 65,17 C67,20 67,24 66,28 ' +
-    'C71,22 78,23 82,29 C87,37 89,46 89,52 C89,57 85,60 79,60 ' +
-    'L64,60 C58,62 55,66 55,74 L55,91 Z"/></g>' +
-    '<circle cx="74" cy="41" r="3.2" style="' + C_DETAIL + '"/>';
+    '<g transform="translate(-1.3,-8.9) scale(0.91)" style="stroke-width:4.4">' +
+      '<path d="M27,91 C24,72 29,54 42,44 C50,38 55,29 56,20 ' +
+      'C56,14 62,12 65,17 C67,20 67,24 66,28 ' +
+      'C71,22 78,23 82,29 C87,37 89,46 89,52 C89,57 85,60 79,60 ' +
+      'L64,60 C58,62 55,66 55,74 L55,91 Z"/>' +
+      '<circle cx="74" cy="41" r="3.5" style="' + C_DETAIL + '"/></g>' +
+    C_BASE + '</g>';
 
+  /* Archer: the turned body of the set with a fletched arrow for its finial. */
   var C_ARCHER = '<g style="' + C_BODY + '">' +
-    /* the bow's limbs are a shade thicker than the emblem in icons.js, so the
-       arc still reads as a bow and not as an arch at 40 px */
-    '<path d="M16,82 C12,72 11,60 13,48 C16,32 30,22 50,22 ' +
-    'C70,22 84,32 87,48 C89,60 88,72 84,82 ' +
-    'L73,75 C76,66 77,57 75,50 C72,38 63,34 50,34 ' +
-    'C37,34 28,38 25,50 C23,57 24,66 27,75 Z"/>' +
-    '<path d="M19,78 L50,86 L81,78 L81.5,81 L50,89.5 L18.5,81 Z" ' +
-    'style="stroke-width:2.2"/>' +
-    '<path d="M46.5,68 L39,80 L39,71.5 L46.5,61 Z ' +
-    'M53.5,68 L61,80 L61,71.5 L53.5,61 Z" style="stroke-width:2.4"/>' +
-    '<rect x="46.5" y="13" width="7" height="75" rx="3.5"/>' +
-    '<path d="M50,2 L61.5,26 L50,21 L38.5,26 Z"/></g>';
+    '<path d="M45.5,41 L30,46 L34,30 L45.5,24 Z"/>' +
+    '<path d="M54.5,41 L70,46 L66,30 L54.5,24 Z"/>' +
+    '<rect x="45.5" y="16" width="9" height="30" rx="4.5"/>' +
+    '<path d="M50,2 L60,22 L50,17 L40,22 Z"/>' +
+    '<rect x="31" y="44" width="38" height="9" rx="4.5"/>' +
+    '<path d="M36,51 C36,62 32,69 26,74 H74 C68,69 64,62 64,51 Z"/>' +
+    C_BASE + '</g>';
 
   var CLASSIC = make({
     id: 'classic',
     name: { he: 'קלאסי', en: 'Classic' },
     palette: { p0: '#efe6cf', p1: '#2f3550', light: '#efe0c3', dark: '#a97e57' },
     boardClass: 'theme-classic',
-    flip: { K: MIRROR_H, A: MIRROR_V },
+    /* only the knight is cut in profile, so only the knight turns */
+    flip: { K: MIRROR_H },
     shapes: { S: C_SOLDIER, K: C_KNIGHT, A: C_ARCHER }
   });
 
@@ -120,7 +121,7 @@ window.WarGame = window.WarGame || {};
   var SHADE = ' fill="#000" fill-opacity=".2" stroke="none"';
   /* a detail on a fixed accent (a visor slit on steel, an eye on a hide) keeps
      a fixed dark, so it does not turn pale on a dark owner */
-  var INK = ' fill="#2b2f38" stroke="none"';
+  var DETAIL = ' fill="#2b2f38" stroke="none"';
   var HOOF = ' fill="#4a2e1e" stroke="none"';
 
   function her(inner) {
@@ -150,7 +151,7 @@ window.WarGame = window.WarGame || {};
     '<path d="M49,8 C46,2 52,-1 56,2 C60,6 56,11 51,11 Z"' + OWN + '/>' +
     '<path d="M38,24 C38,12 43,7 50,7 C57,7 62,12 62,24 L62,32 ' +
       'C56,35 44,35 38,32 Z"' + STEEL + '/>' +
-    '<rect x="40" y="19" width="20" height="5" rx="2.4"' + INK + '/>' +
+    '<rect x="40" y="19" width="20" height="5" rx="2.4"' + DETAIL + '/>' +
     /* the shield, in front of everything on that side */
     '<path d="M9,31 H41 V54 C41,68 30,76 25,79 C20,76 9,68 9,54 Z"' + OWN + '/>' +
     '<path d="M25,31 H41 V54 C41,68 30,76 25,79 Z"' + SHADE + '/>' +
@@ -177,7 +178,7 @@ window.WarGame = window.WarGame || {};
     '<g' + HIDE + '><path d="M67,12 L65,2 L75,10 Z"/>' +
       '<path d="M63,14 C67,10 73,10 77,14 L87,24 C91,28 90,36 85,37 ' +
       'L71,38 C65,38 61,34 60,28 C59,22 60,17 63,14 Z"/></g>' +
-    '<g' + INK + '><circle cx="74" cy="23" r="2.8"/>' +
+    '<g' + DETAIL + '><circle cx="74" cy="23" r="2.8"/>' +
       '<circle cx="85" cy="30" r="2"/></g>' +
     /* the caparison, the owner color on the horse */
     '<path d="M27,37 H64 L68,52 L66,71 L60,61 L53,71 L46,61 L39,71 ' +
@@ -196,7 +197,7 @@ window.WarGame = window.WarGame || {};
     '<circle cx="27" cy="31" r="5.4"' + SKIN + '/>' +
     '<path d="M32,7 C32,2 37,-1 42,0 C47,1 50,5 50,11 L49,18 ' +
       'C44,20 37,20 32,18 Z"' + STEEL + '/>' +
-    '<rect x="34" y="7" width="15" height="4.5" rx="2.2"' + INK + '/>');
+    '<rect x="34" y="7" width="15" height="4.5" rx="2.2"' + DETAIL + '/>');
 
   var H_ARCHER = her(
     /* the bow, then the string it is drawn by */
@@ -257,27 +258,37 @@ window.WarGame = window.WarGame || {};
       inner + '</g>';
   }
 
-  /* Soldier: two crossed strokes for the swords, one loaded stroke for the
-     shield over them, so only the four ends show, as on the classic emblem. */
-  function inkSword(angle) {
-    return '<g transform="rotate(' + angle + ' 50 50)">' +
-      '<path d="M50,1 L56,16 V82 L50,97 L44,82 V16 Z"/>' +
-      '<path d="M33,15 L67,19 L66,27 L34,23 Z"/>' +
-      '<path d="M45,0 L55,2 L54,13 L46,12 Z"/></g>';
-  }
-
+  /* Soldier: a great helm and its crest, two loaded strokes. */
   var I_SOLDIER = inkWrap('S',
-    inkSword(38) + inkSword(-38) +
-    '<path d="M21,35 C34,30 66,30 79,35 L79,58 C79,75 67,87 50,94 ' +
-      'C33,87 21,75 21,58 Z"/>');
+    '<path d="M27,32 C27,14 38,4 53,5 C67,6 77,13 79,23 L68,27 ' +
+      'C65,17 55,13 45,18 C38,22 36,28 36,35 Z"/>' +
+    '<path d="M27,46 C27,27 37,17 50,17 C63,17 73,27 73,46 L73,64 ' +
+      'C73,80 63,91 50,97 C37,91 27,80 27,64 Z"/>' +
+    '<g style="fill:var(--piece-outline,#1b1d24);stroke:none">' +
+      '<path d="M31,52 L47,47 L47,59 L31,58 Z"/>' +
+      '<path d="M53,47 L69,52 L69,58 L53,59 Z"/>' +
+      '<path d="M45,66 H56 L54,86 H46 Z"/></g>');
 
-  /* Knight: the horse head in one stroke. */
+  /* Knight: a horse at the gallop, laid down in strokes that run together. */
   var I_KNIGHT = inkWrap('K',
-    '<path d="M25,93 C22,72 28,53 42,43 C50,37 55,28 56,19 ' +
-      'C56,13 62,11 65,16 C67,19 67,23 66,27 ' +
-      'C71,21 79,22 83,28 C88,36 90,46 90,52 C90,58 86,61 79,61 ' +
-      'L64,61 C58,63 55,67 55,75 L55,93 Z"/>' +
-    '<circle cx="75" cy="41" r="3.4" style="fill:var(--piece-outline,#1b1d24);stroke:none"/>');
+    /* the tail, streaming back */
+    '<path d="M33,46 C22,36 11,32 1,35 L1,47 C10,44 21,48 31,57 Z"/>' +
+    /* the two hind legs, thrown out behind */
+    '<path d="M34,59 C26,59 15,62 6,67 L9,76 C18,71 27,67 36,67 Z"/>' +
+    '<path d="M39,64 C30,66 20,71 12,78 L18,85 C25,79 33,75 42,73 Z"/>' +
+    /* the barrel */
+    '<path d="M27,54 C27,44 35,39 48,39 H62 C70,39 75,45 75,54 ' +
+      'C75,63 68,69 56,69 H40 C32,69 27,62 27,54 Z"/>' +
+    /* the two forelegs, reaching forward */
+    '<path d="M62,61 C70,57 81,54 91,55 L92,64 C83,63 74,66 66,70 Z"/>' +
+    '<path d="M57,65 C65,65 76,70 85,77 L79,84 C72,78 63,74 56,73 Z"/>' +
+    /* the neck, then the head with its ear */
+    '<path d="M54,46 C56,36 60,27 67,20 L82,30 C76,37 72,46 71,56 Z"/>' +
+    '<path d="M70,18 L67,8 L77,14 Z"/>' +
+    '<path d="M62,27 C62,18 69,13 76,16 L91,27 C97,31 98,38 92,41 ' +
+      'L83,42 C77,42 72,40 68,37 L63,33 Z"/>' +
+    '<circle cx="76" cy="25" r="3.2" ' +
+      'style="fill:var(--piece-outline,#1b1d24);stroke:none"/>');
 
   /* Archer: the bow in one crescent stroke, the arrow in a second. */
   var I_ARCHER = inkWrap('A',
@@ -319,24 +330,25 @@ window.WarGame = window.WarGame || {};
       ';stroke:currentColor;stroke-width:3.4">' + inner + '</g>';
   }
 
+  /* Soldier: a faceted shield with the spear standing beside it. */
   var N_S_PATHS =
-    '<path d="M50,4 V29 M34,16 H66 M50,76 V88"/>' +
-    '<path d="M44,84 L50,96 L56,84"/>' +
-    '<path d="M22,30 H78 V52 C78,67 66,77 50,83 C34,77 22,67 22,52 Z"/>';
+    '<path d="M14,26 L38,18 L62,26 L60,54 L48,76 L38,86 L28,76 L16,54 Z"/>' +
+    '<path d="M78,4 L87,26 L78,21 L69,26 Z"/>' +
+    '<path d="M78,24 V94"/>';
 
+  /* Knight: a horse head cut out of straight lines, a low-polygon sign. */
   var N_K_PATHS =
-    '<path d="M29,90 C26,72 31,55 43,45 C51,39 56,30 57,21 ' +
-      'C57,15 62,13 65,18 C67,21 67,25 66,29 ' +
-      'C71,23 77,24 81,30 C86,38 88,46 88,52 C88,57 84,60 78,60 ' +
-      'L64,60 C58,62 55,66 55,74 L55,90 Z"/>' +
-    '<path d="M73,41 h0.1"/>';
+    '<path d="M30,93 L26,70 L33,51 L45,39 L49,25 L56,7 L63,19 ' +
+      'L76,23 L96,39 L92,50 L74,55 L63,62 L59,78 L60,93 Z"/>' +
+    '<path d="M70,33 h0.1"/>';
 
+  /* Archer: the bow bent into two straight limbs, the arrow on the string. */
   var N_A_PATHS =
-    '<path d="M30,10 C50,26 58,40 58,50 C58,61 50,74 30,90"/>' +
-    '<path d="M30,10 L22,50 L30,90"/>' +
-    '<path d="M22,50 H86"/>' +
-    '<path d="M74,42 L88,50 L74,58"/>' +
-    '<path d="M32,42 L24,46 M32,58 L24,54"/>';
+    '<path d="M30,8 L58,50 L30,92"/>' +
+    '<path d="M30,8 L20,50 L30,92"/>' +
+    '<path d="M20,50 H88"/>' +
+    '<path d="M76,42 L90,50 L76,58"/>' +
+    '<path d="M33,42 L23,47 M33,58 L23,53"/>';
 
   var NEON = make({
     id: 'neon',

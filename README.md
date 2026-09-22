@@ -1,12 +1,12 @@
-War Game is a two-player board game on a chess board, played by two people on one screen. It runs in the browser on a phone, an iPad or a PC, in Hebrew or in English, from one link with nothing to install: https://leoreh.github.io/Cole-s-War-Game/
+Cole's War Game is a two-player board game on a chess board, designed by Cole and played by two people on one screen. It runs in the browser on a phone, an iPad or a PC, in Hebrew or in English, from one link with nothing to install: https://leoreh.github.io/Cole-s-War-Game/
 
 # Phone And iPad
 
-Open the link in Safari and play. For an app icon and a full screen, tap Share, then Add to Home Screen. After the first visit the game also opens without internet. The Invite button in the game menu sends the link and these two steps to a friend, in the game's language.
+Open the link in Safari and play. For an app icon and a full screen, tap Share, then Add to Home Screen. After the first visit the game also opens without internet. Invite, under the share icon in the game, sends the link and these two steps to a friend, in the game's language.
 
-A game in progress moves between devices by a code: Settings, Transfer, Export game copies the code, and Import game on the other device restores the position. Share this game in the Invite card sends a link that opens the same position.
+A game in progress moves between devices from the same share icon: Share this game sends a link that opens the same position, and the game code, pasted under Load a game on the other device, does the same without a link.
 
-The game autosaves after every action, so Resume on the menu continues the last game on the same device.
+The game autosaves after every action, so opening it again continues the last game on the same device.
 
 # PC
 

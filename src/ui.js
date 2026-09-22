@@ -1,6 +1,8 @@
 /* =====================================================================
-   ui.js - the board, the overlays, input, animation, settings, storage,
-   the invite and the service worker.
+   ui.js - the board, the panel, the drawers and the sheets that open
+   from its icon bar, input, animation, settings, storage, the invite
+   and the service worker. There is one window and a game is always on
+   the board.
    window.WarGame.UI
    ===================================================================== */
 
@@ -50,13 +52,11 @@ window.WarGame = window.WarGame || {};
 
   var G = {
     settings: null,
-    state: null,      /* the game being played, null when none is running */
-    idle: null,       /* the opening position drawn behind the menu */
+    state: null,      /* the game on the board: there is always one */
     history: [],      /* states before each action of the current turn */
     sel: null,        /* id of the selected piece */
     acts: [],         /* its legal actions */
     busy: false,      /* animating: input is blocked */
-    inviteMode: 'app',
     boardClass: ''    /* the theme class now on the board and on <body> */
   };
 
@@ -261,18 +261,53 @@ window.WarGame = window.WarGame || {};
       btns[j].classList.toggle('is-on', btns[j].dataset.lang === I18N.current);
     }
 
+    renderWordmark(true);
     renderPresets();
     renderThemes();
     renderRules();
-    renderMenu();
     /* the live lines hold a sentence written in the old language */
     msg('');
-    transferMsg('');
+    shareMsg('');
     renderPieces();
     if (G.state) { renderPanel(); renderMarks(); }
     if (isOpen('merge')) renderMergeDialog();
     if (isOpen('over')) renderOver();
-    if (isOpen('invite')) { renderInvite(); inviteMsg(''); }
+    if (isOpen('share')) renderShare();
+  }
+
+  /* --------------------------------------------------------- wordmark --- */
+
+  /* app.title1 and app.title2 come in the order they are drawn; which of the
+     two is the title and which the credit is a matter of the language, since
+     English reads the credit over the name and Hebrew reads it under it */
+  function wordmarkRoles() {
+    return I18N.current === 'he'
+      ? ['wm-title', 'wm-credit']
+      : ['wm-credit', 'wm-title'];
+  }
+
+  function fillWordmark(node, roles, play) {
+    if (!node) return;
+    var lines = node.getElementsByClassName('wm-line');
+    if (lines.length < 2) return;
+    lines[0].textContent = t('app.title1');
+    lines[1].textContent = t('app.title2');
+    lines[0].className = 'wm-line ' + roles[0];
+    lines[1].className = 'wm-line ' + roles[1];
+    /* one string for a screen reader, whatever the two lines are */
+    node.setAttribute('aria-label', t('app.title'));
+    node.classList.remove('is-in');
+    if (!play || !animOn()) return;
+    void node.offsetWidth;        /* so the entrance starts from the top */
+    node.classList.add('is-in');
+  }
+
+  /* the panel wordmark plays on the first render, on a new language and on a
+     new theme; the one in the rules sheet plays when that sheet opens */
+  function renderWordmark(play) {
+    var roles = wordmarkRoles();
+    fillWordmark(el.wmPanel, roles, play);
+    fillWordmark(el.wmRules, roles, false);
   }
 
   /* --------------------------------------------------------- overlays --- */
@@ -294,25 +329,12 @@ window.WarGame = window.WarGame || {};
     void n.offsetWidth;          /* so the transition starts from the closed look */
     n.classList.add('is-open');
     document.body.classList.add('has-overlay');
-    menuUnder();
-  }
-
-  /* the menu card steps back while a sheet, a drawer or a dialog is over it,
-     and comes back when that one closes */
-  function menuUnder() {
-    var m = ov('menu');
-    if (!m) return;
-    var others = ['rules', 'settings', 'invite', 'merge', 'over'];
-    var on = false;
-    for (var i = 0; i < others.length; i++) if (isOpen(others[i])) on = true;
-    m.classList.toggle('is-under', on);
   }
 
   function closeOv(name) {
     var n = ov(name);
     if (!n || n.hidden) return;
     n.classList.remove('is-open');
-    menuUnder();
     n._timer = setTimeout(function () {
       n.hidden = true;
       n._timer = null;
@@ -320,33 +342,25 @@ window.WarGame = window.WarGame || {};
     }, 230);
   }
 
+  var OVERLAYS = ['appearance', 'settings', 'rules', 'share', 'confirm',
+    'merge', 'over'];
+
+  /* the ones a tap outside or Escape closes, innermost first */
+  var LIGHT = ['share', 'rules', 'appearance', 'settings', 'confirm'];
+
   function anyOverlayOpen() {
-    var names = ['menu', 'rules', 'settings', 'invite', 'merge', 'over'];
-    for (var i = 0; i < names.length; i++) if (isOpen(names[i])) return true;
+    for (var i = 0; i < OVERLAYS.length; i++) if (isOpen(OVERLAYS[i])) return true;
     return false;
   }
 
-  /* --------------------------------------------------------- the menu --- */
+  /* ------------------------------------------------------- new game ---- */
 
-  function gameInProgress() {
-    return !!(G.state && G.state.winner === null) || hasSavedGame();
-  }
+  function gameOn() { return !!(G.state && G.state.winner === null); }
 
-  function renderMenu() {
-    el.btnResume.hidden = !gameInProgress();
-  }
-
-  function openMenu() {
-    showConfirm(false);
-    renderMenu();
-    openOv('menu');
-  }
-
-  function closeMenu() { closeOv('menu'); }
-
-  function showConfirm(on) {
-    el.menuButtons.hidden = !!on;
-    el.menuConfirm.hidden = !on;
+  /* a game under way is only lost on purpose */
+  function askNewGame() {
+    if (gameOn()) openOv('confirm');
+    else newGame();
   }
 
   /* ------------------------------------------------------- the layout --- */
@@ -402,8 +416,7 @@ window.WarGame = window.WarGame || {};
 
   /* -------------------------------------------------------- the pieces -- */
 
-  /* the board is never empty: with no game it shows the opening position */
-  function viewState() { return G.state || G.idle; }
+  function viewState() { return G.state; }
 
   function renderPieces() {
     var st = viewState(), id, p;
@@ -451,15 +464,16 @@ window.WarGame = window.WarGame || {};
 
   /* ---------------------------------------------------------- the panel - */
 
+  /* the title carries the name where the compact bar shows the glyph alone */
   function chip(kind, dim) {
-    return '<span class="chip' + (dim ? ' chip--dim' : '') + '">' +
+    var name = esc(t('kind.' + kind));
+    return '<span class="chip' + (dim ? ' chip--dim' : '') + '" title="' + name + '">' +
       '<span class="chip-ico">' + Icons.glyph(kind, { theme: currentTheme() }) + '</span>' +
-      '<span>' + esc(t('kind.' + kind)) + '</span></span>';
+      '<span>' + name + '</span></span>';
   }
 
   function renderPanel() {
     var st = G.state;
-    el.panel.hidden = !st;
     if (!st) return;
     var pl = st.turn.player;
 
@@ -1128,13 +1142,6 @@ window.WarGame = window.WarGame || {};
     try { return localStorage.getItem(GAME_KEY); } catch (e) { return null; }
   }
 
-  /* a version 1 code no longer deserializes, so it counts as no save */
-  function hasSavedGame() {
-    var c = savedCode();
-    if (!c) return false;
-    try { Engine.deserialize(c); return true; } catch (e) { return false; }
-  }
-
   function resetBoardNodes() {
     G.history = [];
     G.sel = null;
@@ -1146,25 +1153,12 @@ window.WarGame = window.WarGame || {};
     clearNode(el.marks);
   }
 
-  /* the board with no game on it: the opening position, dimmed */
-  function showIdleBoard() {
-    G.state = null;
-    G.idle = Engine.newGame({ diagonalMoves: !!G.settings.diagonalMoves }, 0);
-    resetBoardNodes();
-    document.body.classList.add('no-game');
-    el.panel.hidden = true;
-    msg('');
-    render();
-  }
-
   function startGame(state) {
     G.state = state;
     resetBoardNodes();
-    document.body.classList.remove('no-game');
-    el.panel.hidden = false;
     closeOv('merge');
     closeOv('over');
-    closeMenu();
+    closeOv('confirm');
     msg('');
     render();
     remeasure();
@@ -1185,12 +1179,12 @@ window.WarGame = window.WarGame || {};
     });
   }
 
-  function resumeGame() {
-    if (G.state) { closeMenu(); return; }
+  /* a WG1. code no longer deserializes, so an old save is no save */
+  function resumeSaved() {
     var c = savedCode();
-    if (!c) { renderMenu(); return; }
-    try { startGame(Engine.deserialize(c)); }
-    catch (e) { renderMenu(); }
+    if (!c) return false;
+    try { startGame(Engine.deserialize(c)); return true; }
+    catch (e) { return false; }
   }
 
   /* a code may arrive as a bare string or inside a #g=... link */
@@ -1211,15 +1205,55 @@ window.WarGame = window.WarGame || {};
     } catch (e) { return false; }
   }
 
-  /* --------------------------------------------------------- transfer --- */
+  /* ------------------------------------------------------- the share --- */
 
-  function transferMsg(text) { el.transferMsg.textContent = text || ''; }
+  function shareMsg(text) { el.shareMsg.textContent = text || ''; }
 
-  function doExport() {
-    var code = G.state ? Engine.serialize(G.state) : savedCode();
-    if (!code) { transferMsg(t('settings.noGame')); return; }
-    el.exportCode.value = code;
-    copyExport();
+  function canShare() { return typeof navigator.share === 'function'; }
+
+  /* the invite message, and the same message carrying this position */
+  function inviteText(mode) {
+    var head = t('app.title') + '\n';
+    if (mode === 'game' && G.state) {
+      return head + t('invite.gameWhat') + '\n' +
+        GAME_URL + '#g=' + Engine.serialize(G.state) + '\n' +
+        t('invite.howTo');
+    }
+    return head + t('invite.what') + '\n' + GAME_URL + '\n' + t('invite.howTo');
+  }
+
+  /* the link is one run of Latin: a bdi keeps its last slash from jumping
+     to the head of the line in Hebrew */
+  function fillText(node, text) {
+    node.innerHTML = text.split('\n').map(function (line) {
+      return line.indexOf('http') === 0
+        ? '<bdi dir="ltr">' + esc(line) + '</bdi>'
+        : esc(line);
+    }).join('\n');
+  }
+
+  function renderShare() {
+    var on = gameOn();
+    var label = canShare() ? t('game.share') : t('share.copy');
+    fillText(el.inviteText, inviteText('app'));
+    el.btnInvite.textContent = label;
+    /* a finished game is no longer worth sending on */
+    el.shareGame.hidden = !on;
+    if (on) fillText(el.shareGameText, inviteText('game'));
+    el.btnShareGame.textContent = label;
+    el.exportCode.value = G.state ? Engine.serialize(G.state) : '';
+  }
+
+  function openRules() {
+    fillWordmark(el.wmRules, wordmarkRoles(), true);
+    openOv('rules');
+  }
+
+  function openShare() {
+    renderShare();
+    shareMsg('');
+    openOv('share');
+    el.shareBody.scrollTop = 0;   /* a hidden box keeps no scroll, so after */
   }
 
   function copyText(text, onOk, onFail) {
@@ -1230,99 +1264,12 @@ window.WarGame = window.WarGame || {};
     onFail();
   }
 
-  function copyExport() {
-    var code = el.exportCode.value;
-    if (!code) { transferMsg(t('settings.noGame')); return; }
-    copyText(code,
-      function () { transferMsg(t('settings.copied')); },
-      function () {
-        if (legacyCopy(el.exportCode)) transferMsg(t('settings.copied'));
-        else transferMsg(t('settings.copyFail'));
-      });
-  }
-
   function legacyCopy(node) {
     try {
       node.focus();
       node.select();
       return document.execCommand('copy');
     } catch (e) { return false; }
-  }
-
-  function doImport() {
-    var code = cleanCode(el.importCode.value);
-    if (!code) { transferMsg(t('settings.importBad')); return; }
-    var st;
-    try { st = Engine.deserialize(code); }
-    catch (e) { transferMsg(t('settings.importBad')); return; }
-    transferMsg(t('settings.imported'));
-    closeOv('settings');
-    startGame(st);
-  }
-
-  function doPaste() {
-    if (navigator.clipboard && navigator.clipboard.readText) {
-      navigator.clipboard.readText().then(function (text) {
-        el.importCode.value = text;
-        transferMsg('');
-      }, function () {
-        el.importCode.focus();
-        transferMsg(t('settings.pasteFail'));
-      });
-    } else {
-      el.importCode.focus();
-      transferMsg(t('settings.pasteFail'));
-    }
-  }
-
-  /* ----------------------------------------------------------- invite --- */
-
-  function inviteText(mode) {
-    if (mode === 'game' && G.state) {
-      return t('invite.gameWhat') + '\n' +
-        GAME_URL + '#g=' + Engine.serialize(G.state) + '\n' +
-        t('invite.howTo');
-    }
-    return t('invite.what') + '\n' + GAME_URL + '\n' + t('invite.howTo');
-  }
-
-  function renderInvite() {
-    var gameOn = !!(G.state && G.state.winner === null);
-    if (!gameOn) G.inviteMode = 'app';
-    el.inviteGame.hidden = !gameOn;
-    el.inviteGame.classList.toggle('is-on', G.inviteMode === 'game');
-    /* the link is one run of Latin: a bdi keeps its last slash from jumping
-       to the head of the line in Hebrew */
-    el.inviteText.innerHTML = inviteText(G.inviteMode).split('\n')
-      .map(function (line, i) {
-        return i === 1 ? '<bdi dir="ltr">' + esc(line) + '</bdi>' : esc(line);
-      }).join('\n');
-    el.inviteCopy.textContent = canShare() ? t('game.share') : t('invite.copy');
-  }
-
-  function canShare() { return typeof navigator.share === 'function'; }
-
-  function openInvite() {
-    G.inviteMode = 'app';
-    renderInvite();
-    inviteMsg('');
-    /* with no share sheet the text is on the clipboard as soon as the card
-       opens, so one tap is enough */
-    if (!canShare()) copyInvite(true);
-    openOv('invite');
-  }
-
-  function inviteMsg(text) { el.inviteMsg.textContent = text || ''; }
-
-  function copyInvite(quiet) {
-    var text = inviteText(G.inviteMode);
-    copyText(text,
-      function () { inviteMsg(t('invite.copied')); },
-      function () {
-        if (quiet) return;
-        selectNode(el.inviteText);   /* so it can still be copied by hand */
-        inviteMsg(t('invite.copyFail'));
-      });
   }
 
   function selectNode(node) {
@@ -1335,16 +1282,45 @@ window.WarGame = window.WarGame || {};
     } catch (e) { /* selection is a courtesy, not a need */ }
   }
 
-  function shareInvite() {
-    var text = inviteText(G.inviteMode);
+  /* the device's own share sheet when it has one, else the clipboard; with
+     neither, the text is selected so it can still be copied by hand */
+  function sendText(text, node) {
     if (canShare()) {
       try {
         var p = navigator.share({ title: t('app.title'), text: text });
         if (p && p.catch) p.catch(function () { /* the sheet was dismissed */ });
-      } catch (e) { copyInvite(); }
-      return;
+        return;
+      } catch (e) { /* on to the clipboard */ }
     }
-    copyInvite();
+    copyText(text,
+      function () { shareMsg(t('share.copiedText')); },
+      function () {
+        selectNode(node);
+        shareMsg(t('share.copyFail'));
+      });
+  }
+
+  function copyCode() {
+    var code = el.exportCode.value;
+    if (!code) return;
+    copyText(code,
+      function () { shareMsg(t('share.copiedCode')); },
+      function () {
+        if (legacyCopy(el.exportCode)) shareMsg(t('share.copiedCode'));
+        else shareMsg(t('share.copyFail'));
+      });
+  }
+
+  /* a bad code says so and changes nothing */
+  function loadCode() {
+    var code = cleanCode(el.importCode.value), st;
+    if (!code) { shareMsg(t('share.badCode')); return; }
+    try { st = Engine.deserialize(code); }
+    catch (e) { shareMsg(t('share.badCode')); return; }
+    el.importCode.value = '';
+    shareMsg(t('share.loaded'));
+    closeOv('share');
+    startGame(st);
   }
 
   /* ----------------------------------------------------- rules screen --- */
@@ -1404,7 +1380,7 @@ window.WarGame = window.WarGame || {};
     el.rulesBody.innerHTML = out;
   }
 
-  /* -------------------------------------------------- settings drawer --- */
+  /* ------------------------------------------ appearance and settings --- */
 
   function renderPresets() {
     var out = '';
@@ -1443,25 +1419,28 @@ window.WarGame = window.WarGame || {};
     el.themes.innerHTML = out;
   }
 
-  function fillSettingsForm() {
+  function fillAppearanceForm() {
     el.setP0.value = G.settings.p0;
     el.setP1.value = G.settings.p1;
     el.setLight.value = G.settings.sqLight;
     el.setDark.value = G.settings.sqDark;
     el.setRandom.checked = !!G.settings.randomBoard;
-    el.setAnim.checked = !!G.settings.animations;
     el.setCoords.checked = !!G.settings.coordinates;
-    el.setDiagMoves.checked = !!G.settings.diagonalMoves;
-    el.exportCode.value = G.state ? Engine.serialize(G.state) : (savedCode() || '');
     renderThemes();
-    transferMsg('');
   }
 
-  /* every appearance change lands on the board that is already on screen */
+  function fillSettingsForm() {
+    el.setAnim.checked = !!G.settings.animations;
+    el.setDiagMoves.checked = !!G.settings.diagonalMoves;
+  }
+
+  /* every appearance change lands on the board that is already on screen,
+     the panel with it: the swatch and the chips carry the colors too */
   function settingChanged() {
     saveSettings();
     applySettings();
     renderPieces();
+    renderPanel();
     renderThemes();
   }
 
@@ -1473,7 +1452,7 @@ window.WarGame = window.WarGame || {};
         G.settings.sqLight = PRESETS[i].sqLight;
         G.settings.sqDark = PRESETS[i].sqDark;
         G.settings.randomBoard = false;   /* a chosen palette wins over the random one */
-        fillSettingsForm();
+        fillAppearanceForm();
         settingChanged();
         return;
       }
@@ -1490,14 +1469,21 @@ window.WarGame = window.WarGame || {};
       G.settings.sqDark = d.palette.dark;
     }
     G.settings.randomBoard = false;
-    fillSettingsForm();
+    fillAppearanceForm();
     settingChanged();
+    renderWordmark(true);      /* the title wears the theme too */
+  }
+
+  function openAppearance() {
+    fillAppearanceForm();
+    openOv('appearance');
+    el.appearanceBody.scrollTop = 0;
   }
 
   function openSettings() {
     fillSettingsForm();
-    el.settingsBody.scrollTop = 0;
     openOv('settings');
+    el.settingsBody.scrollTop = 0;
   }
 
   /* ------------------------------------------------------ service worker */
@@ -1544,11 +1530,11 @@ window.WarGame = window.WarGame || {};
     el.btnHeal = $('btn-heal');
     el.btnEndTurn = $('btn-endturn');
     el.btnUndo = $('btn-undo');
-    el.btnResume = $('btn-resume');
-    el.menuButtons = $('menu-buttons');
-    el.menuConfirm = $('menu-confirm');
 
+    el.wmPanel = $('wm-panel');
+    el.wmRules = $('wm-rules');
     el.rulesBody = $('rules-body');
+    el.appearanceBody = $('appearance-body');
     el.settingsBody = $('settings-body');
     el.presets = $('presets');
     el.themes = $('themes');
@@ -1561,14 +1547,16 @@ window.WarGame = window.WarGame || {};
     el.setAnim = $('set-anim');
     el.setCoords = $('set-coords');
     el.setDiagMoves = $('set-diagmoves');
+
+    el.shareBody = $('share-body');
+    el.shareMsg = $('share-msg');
+    el.inviteText = $('invite-text');
+    el.btnInvite = $('btn-invite');
+    el.shareGame = $('share-game');
+    el.shareGameText = $('share-game-text');
+    el.btnShareGame = $('btn-share-game');
     el.exportCode = $('export-code');
     el.importCode = $('import-code');
-    el.transferMsg = $('transfer-msg');
-
-    el.inviteText = $('invite-text');
-    el.inviteMsg = $('invite-msg');
-    el.inviteCopy = $('btn-invite-copy');
-    el.inviteGame = $('btn-invite-game');
 
     el.mergePiece = $('merge-piece');
     el.mergeChoices = $('merge-choices');
@@ -1577,30 +1565,26 @@ window.WarGame = window.WarGame || {};
   }
 
   function wire() {
-    /* --- the menu card --- */
-    $('btn-new').addEventListener('click', function () {
-      if (gameInProgress()) showConfirm(true);
-      else newGame();
-    });
-    $('btn-new-yes').addEventListener('click', function () {
-      showConfirm(false);
-      newGame();
-    });
-    $('btn-new-no').addEventListener('click', function () { showConfirm(false); });
-    $('btn-resume').addEventListener('click', resumeGame);
-    $('btn-rules').addEventListener('click', function () { openOv('rules'); });
-    $('btn-settings').addEventListener('click', openSettings);
-    $('btn-invite').addEventListener('click', openInvite);
-
     /* --- the panel --- */
     el.btnEndTurn.addEventListener('click', endTurn);
     el.btnUndo.addEventListener('click', undo);
     el.btnHeal.addEventListener('click', function () {
       if (G.sel) doAction({ type: 'heal', piece: G.sel });
     });
-    $('btn-gamemenu').addEventListener('click', openMenu);
-    $('btn-palette').addEventListener('click', openSettings);
-    $('btn-share').addEventListener('click', openInvite);
+
+    /* --- the icon bar --- */
+    $('btn-newgame').addEventListener('click', askNewGame);
+    $('btn-appearance').addEventListener('click', openAppearance);
+    $('btn-settings').addEventListener('click', openSettings);
+    $('btn-rules').addEventListener('click', openRules);
+    $('btn-share').addEventListener('click', openShare);
+
+    /* --- the new game question --- */
+    $('btn-new-yes').addEventListener('click', function () {
+      closeOv('confirm');
+      newGame();
+    });
+    $('btn-new-no').addEventListener('click', function () { closeOv('confirm'); });
 
     /* --- closing --- */
     var closers = document.querySelectorAll('[data-close]');
@@ -1609,19 +1593,18 @@ window.WarGame = window.WarGame || {};
         closeOv(e.currentTarget.getAttribute('data-close'));
       });
     }
-    /* a tap on the backdrop closes the sheets, never the dialogs */
-    ['rules', 'settings', 'invite'].forEach(function (name) {
+    /* a tap outside closes a drawer, a sheet and the question, never the
+       merge dialog and never the game over card */
+    LIGHT.forEach(function (name) {
       ov(name).addEventListener('click', function (e) {
         if (e.target === ov(name)) closeOv(name);
       });
     });
     document.addEventListener('keydown', function (e) {
       if (e.key !== 'Escape') return;
-      var names = ['invite', 'rules', 'settings'];
-      for (var k = 0; k < names.length; k++) {
-        if (isOpen(names[k])) { closeOv(names[k]); return; }
+      for (var k = 0; k < LIGHT.length; k++) {
+        if (isOpen(LIGHT[k])) { closeOv(LIGHT[k]); return; }
       }
-      if (isOpen('menu') && gameInProgress()) closeMenu();
     });
 
     /* --- the board --- */
@@ -1646,9 +1629,8 @@ window.WarGame = window.WarGame || {};
 
     /* --- game over --- */
     $('btn-again').addEventListener('click', function () { closeOv('over'); newGame(); });
-    $('btn-over-menu').addEventListener('click', function () { closeOv('over'); openMenu(); });
 
-    /* --- the settings --- */
+    /* --- the appearance drawer --- */
     el.themes.addEventListener('click', function (e) {
       var b = e.target.closest ? e.target.closest('.theme-btn') : null;
       if (b) applyTheme(b.dataset.theme);
@@ -1691,36 +1673,31 @@ window.WarGame = window.WarGame || {};
       el.setRandom.checked = true;
       settingChanged();
     });
-
-    el.setAnim.addEventListener('change', function () {
-      G.settings.animations = el.setAnim.checked;
-      settingChanged();
-    });
     el.setCoords.addEventListener('change', function () {
       G.settings.coordinates = el.setCoords.checked;
       settingChanged();
     });
+
+    /* --- the settings drawer --- */
+    el.setAnim.addEventListener('change', function () {
+      G.settings.animations = el.setAnim.checked;
+      settingChanged();
+    });
     el.setDiagMoves.addEventListener('change', function () {
       G.settings.diagonalMoves = el.setDiagMoves.checked;
-      saveSettings();
-      if (!G.state) showIdleBoard();   /* the opening board follows at once */
+      saveSettings();      /* the rule itself waits for the next new game */
     });
 
-    $('btn-export').addEventListener('click', doExport);
-    $('btn-copy').addEventListener('click', copyExport);
-    $('btn-import').addEventListener('click', doImport);
-    $('btn-paste').addEventListener('click', doPaste);
-
-    /* --- the invite card --- */
-    el.inviteGame.addEventListener('click', function () {
-      G.inviteMode = G.inviteMode === 'game' ? 'app' : 'game';
-      renderInvite();
-      inviteMsg('');
-      if (!canShare()) copyInvite(true);
+    /* --- the share sheet --- */
+    el.btnInvite.addEventListener('click', function () {
+      sendText(inviteText('app'), el.inviteText);
     });
-    el.inviteCopy.addEventListener('click', function () {
-      if (canShare()) shareInvite(); else copyInvite();
+    el.btnShareGame.addEventListener('click', function () {
+      if (!gameOn()) return;
+      sendText(inviteText('game'), el.shareGameText);
     });
+    $('btn-copy-code').addEventListener('click', copyCode);
+    $('btn-load-code').addEventListener('click', loadCode);
 
     window.addEventListener('resize', remeasure);
     window.addEventListener('orientationchange', function () {
@@ -1745,20 +1722,15 @@ window.WarGame = window.WarGame || {};
     I18N.set(G.settings.lang);
 
     buildSquares();
-    langButtons($('lang-switch-menu'));
-    langButtons($('lang-switch-settings'));
+    langButtons($('lang-switch'));
     wire();
 
     applySettings();
-    showIdleBoard();
     refreshTexts();
 
-    /* a link with a position in it opens that position; a saved game opens
-       straight away; with neither, the menu is over the opening board */
-    if (!loadFromHash()) {
-      if (hasSavedGame()) resumeGame();
-      else openMenu();
-    }
+    /* a link with a position in it opens that position, then a saved game;
+       with neither, a game starts at once */
+    if (!loadFromHash() && !resumeSaved()) newGame();
     remeasure();
     registerSW();
   }
@@ -1772,7 +1744,6 @@ window.WarGame = window.WarGame || {};
   window.WarGame.UI = {
     init: init,
     newGame: newGame,
-    openMenu: openMenu,
     setLang: setLang,
     importCode: function (code) {
       var st = Engine.deserialize(cleanCode(code));

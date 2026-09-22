@@ -11,7 +11,7 @@
 <meta name="format-detection" content="telephone=no">
 <meta name="color-scheme" content="dark">
 <meta name="theme-color" content="#141821">
-<title>War Game</title>
+<title>Cole's War Game</title>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="icon" href="icons/icon-192.png">
@@ -21,7 +21,7 @@
 
 <div id="app">
 
-  <!-- ====================================================== the board -->
+  <!-- ====================================== the board and its panel -->
   <div class="stage">
     <div class="board-wrap">
       <div id="board" class="board">
@@ -33,31 +33,18 @@
       </div>
     </div>
 
-    <aside id="panel" class="panel" hidden>
+    <aside id="panel" class="panel">
       <div class="panel-top">
+        <!-- the wordmark: the two lines come from i18n in display order,
+             and ui.js says which of them is the title and which the credit -->
+        <h1 class="wordmark wordmark--panel" id="wm-panel">
+          <span class="wm-line"></span>
+          <span class="wm-line"></span>
+        </h1>
         <div class="turn-line">
           <span id="turn-swatch" class="swatch"></span>
           <span id="turn-name" class="turn-name"></span>
           <span id="turn-number" class="turn-number"></span>
-          <button type="button" id="btn-palette" class="iconbtn" data-i18n-title="game.appearance">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-.9.8-1.7 1.7-1.7H16c2.8 0 5-2.2 5-5 0-4-4-7.3-9-7.3z"
-                    fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
-              <circle cx="7.6" cy="12" r="1.25" fill="currentColor"/>
-              <circle cx="9.9" cy="8.1" r="1.25" fill="currentColor"/>
-              <circle cx="14.4" cy="7.7" r="1.25" fill="currentColor"/>
-              <circle cx="17.5" cy="11" r="1.25" fill="currentColor"/>
-            </svg>
-          </button>
-          <button type="button" id="btn-share" class="iconbtn" data-i18n-title="game.share">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <circle cx="18" cy="5.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
-              <circle cx="6" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
-              <circle cx="18" cy="18.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
-              <path d="M8.4 10.8 15.6 6.8 M8.4 13.2 15.6 17.2" fill="none"
-                    stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
-            </svg>
-          </button>
         </div>
         <div class="combo">
           <div class="combo-row">
@@ -71,57 +58,68 @@
         </div>
         <p id="panel-msg" class="panel-msg" aria-live="polite"></p>
       </div>
-      <div class="panel-actions">
-        <button type="button" id="btn-heal" class="btn btn--heal" data-i18n="action.heal" hidden></button>
-        <button type="button" id="btn-endturn" class="btn btn--primary" data-i18n="game.endTurn"></button>
-        <button type="button" id="btn-undo" class="btn" data-i18n="game.undo"></button>
-        <button type="button" id="btn-gamemenu" class="btn" data-i18n="game.menu"></button>
+
+      <div class="panel-bottom">
+        <div class="panel-actions">
+          <button type="button" id="btn-heal" class="btn btn--heal" data-i18n="action.heal" hidden></button>
+          <button type="button" id="btn-endturn" class="btn btn--primary" data-i18n="game.endTurn"></button>
+          <button type="button" id="btn-undo" class="btn" data-i18n="game.undo"></button>
+        </div>
+
+        <!-- the five icons: everything that is not a move on the board -->
+        <nav class="iconbar">
+          <button type="button" id="btn-newgame" class="iconbtn iconbtn--bar" data-i18n-title="game.newGame">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M12 8.3 V15.7 M8.3 12 H15.7" fill="none" stroke="currentColor"
+                    stroke-width="1.7" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button type="button" id="btn-appearance" class="iconbtn iconbtn--bar" data-i18n-title="game.appearance">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M12 3a9 9 0 1 0 0 18c1.1 0 1.8-.8 1.8-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-.9.8-1.7 1.7-1.7H16c2.8 0 5-2.2 5-5 0-4-4-7.3-9-7.3z"
+                    fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+              <circle cx="7.6" cy="12" r="1.25" fill="currentColor"/>
+              <circle cx="9.9" cy="8.1" r="1.25" fill="currentColor"/>
+              <circle cx="14.4" cy="7.7" r="1.25" fill="currentColor"/>
+              <circle cx="17.5" cy="11" r="1.25" fill="currentColor"/>
+            </svg>
+          </button>
+          <button type="button" id="btn-settings" class="iconbtn iconbtn--bar" data-i18n-title="settings.title">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="12" cy="12" r="3.1" fill="none" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M19.3 13.5a7.7 7.7 0 0 0 0-3l1.8-1.4-1.9-3.2-2.1.8a7.7 7.7 0 0 0-2.6-1.5L14.2 3H9.8l-.3 2.2a7.7 7.7 0 0 0-2.6 1.5l-2.1-.8-1.9 3.2 1.8 1.4a7.7 7.7 0 0 0 0 3l-1.8 1.4 1.9 3.2 2.1-.8a7.7 7.7 0 0 0 2.6 1.5l.3 2.2h4.4l.3-2.2a7.7 7.7 0 0 0 2.6-1.5l2.1.8 1.9-3.2z"
+                    fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+            </svg>
+          </button>
+          <button type="button" id="btn-rules" class="iconbtn iconbtn--bar" data-i18n-title="rules.title">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="12" cy="12" r="8.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M12 11 V16.3" fill="none" stroke="currentColor"
+                    stroke-width="1.8" stroke-linecap="round"/>
+              <circle cx="12" cy="7.9" r="1.15" fill="currentColor"/>
+            </svg>
+          </button>
+          <button type="button" id="btn-share" class="iconbtn iconbtn--bar" data-i18n-title="game.share">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle cx="18" cy="5.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+              <circle cx="6" cy="12" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+              <circle cx="18" cy="18.5" r="2.6" fill="none" stroke="currentColor" stroke-width="1.7"/>
+              <path d="M8.4 10.8 15.6 6.8 M8.4 13.2 15.6 17.2" fill="none"
+                    stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>
+            </svg>
+          </button>
+        </nav>
       </div>
     </aside>
   </div>
 
-  <!-- ======================================================= the menu -->
-  <div id="ov-menu" class="overlay overlay--menu" hidden>
-    <div class="menu card-pop" role="dialog" aria-modal="true">
-      <h1 class="menu-title" data-i18n="app.title"></h1>
-      <div class="menu-buttons" id="menu-buttons">
-        <button type="button" id="btn-new" class="btn btn--primary btn--wide" data-i18n="menu.newGame"></button>
-        <button type="button" id="btn-resume" class="btn btn--wide" data-i18n="menu.resume" hidden></button>
-        <button type="button" id="btn-rules" class="btn btn--wide" data-i18n="menu.rules"></button>
-        <button type="button" id="btn-settings" class="btn btn--wide" data-i18n="menu.settings"></button>
-        <button type="button" id="btn-invite" class="btn btn--wide" data-i18n="menu.invite"></button>
-      </div>
-      <div class="menu-confirm" id="menu-confirm" hidden>
-        <p data-i18n="menu.confirmNew"></p>
-        <button type="button" id="btn-new-yes" class="btn btn--primary btn--wide" data-i18n="menu.confirmStart"></button>
-        <button type="button" id="btn-new-no" class="btn btn--wide" data-i18n="menu.confirmBack"></button>
-      </div>
-      <div class="lang-switch" id="lang-switch-menu"></div>
-    </div>
-  </div>
-
-  <!-- ====================================================== the rules -->
-  <div id="ov-rules" class="overlay overlay--sheet" hidden>
-    <section class="sheet" role="dialog" aria-modal="true">
-      <header class="sheet-head">
-        <h2 data-i18n="rules.title"></h2>
-        <button type="button" class="iconbtn btn-close" data-close="rules" data-i18n-title="common.close">
-          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path d="M6 6 18 18 M18 6 6 18" fill="none" stroke="currentColor"
-                  stroke-width="2" stroke-linecap="round"/>
-          </svg>
-        </button>
-      </header>
-      <div id="rules-body" class="doc-body"></div>
-    </section>
-  </div>
-
-  <!-- =================================================== the settings -->
-  <div id="ov-settings" class="overlay overlay--drawer" hidden>
+  <!-- ================================================ the appearance -->
+  <div id="ov-appearance" class="overlay overlay--drawer" hidden>
     <section class="drawer" role="dialog" aria-modal="true">
       <header class="sheet-head">
-        <h2 data-i18n="settings.title"></h2>
-        <button type="button" class="iconbtn btn-close" data-close="settings" data-i18n-title="common.close">
+        <h2 data-i18n="game.appearance"></h2>
+        <button type="button" class="iconbtn btn-close" data-close="appearance" data-i18n-title="common.close">
           <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path d="M6 6 18 18 M18 6 6 18" fill="none" stroke="currentColor"
                   stroke-width="2" stroke-linecap="round"/>
@@ -129,12 +127,13 @@
         </button>
       </header>
 
-      <div class="drawer-body" id="settings-body">
-
-        <section class="card" id="card-appearance">
-          <h3 data-i18n="settings.appearance"></h3>
+      <div class="drawer-body" id="appearance-body">
+        <section class="group">
+          <h4 data-i18n="settings.theme"></h4>
           <div class="themes" id="themes"></div>
+        </section>
 
+        <section class="group">
           <h4 data-i18n="settings.colors"></h4>
           <div class="fields">
             <label class="field">
@@ -154,73 +153,136 @@
               <input type="color" id="set-dark">
             </label>
           </div>
+        </section>
 
+        <section class="group">
           <h4 data-i18n="settings.presets"></h4>
           <div class="presets" id="presets"></div>
+        </section>
 
+        <section class="group">
           <label class="switch">
             <input type="checkbox" id="set-random">
             <span data-i18n="settings.randomBoard"></span>
           </label>
           <button type="button" id="btn-reshuffle" class="btn btn--small" data-i18n="settings.reshuffle"></button>
-
-          <label class="switch">
-            <input type="checkbox" id="set-anim">
-            <span data-i18n="settings.animations"></span>
-          </label>
           <label class="switch">
             <input type="checkbox" id="set-coords">
             <span data-i18n="settings.coordinates"></span>
           </label>
         </section>
+      </div>
+    </section>
+  </div>
 
-        <section class="card">
-          <h3 data-i18n="settings.rules"></h3>
+  <!-- =================================================== the settings -->
+  <div id="ov-settings" class="overlay overlay--drawer" hidden>
+    <section class="drawer" role="dialog" aria-modal="true">
+      <header class="sheet-head">
+        <h2 data-i18n="settings.title"></h2>
+        <button type="button" class="iconbtn btn-close" data-close="settings" data-i18n-title="common.close">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M6 6 18 18 M18 6 6 18" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </header>
+
+      <div class="drawer-body" id="settings-body">
+        <section class="group">
+          <h4 data-i18n="settings.language"></h4>
+          <div class="lang-switch" id="lang-switch"></div>
+        </section>
+
+        <section class="group">
           <label class="switch">
             <input type="checkbox" id="set-diagmoves">
             <span data-i18n="settings.diagonalMoves"></span>
           </label>
           <p class="note" data-i18n="settings.rulesNote"></p>
+          <label class="switch">
+            <input type="checkbox" id="set-anim">
+            <span data-i18n="settings.animations"></span>
+          </label>
         </section>
-
-        <section class="card">
-          <h3 data-i18n="settings.language"></h3>
-          <div class="lang-switch" id="lang-switch-settings"></div>
-        </section>
-
-        <section class="card">
-          <h3 data-i18n="settings.transfer"></h3>
-          <p class="note" data-i18n="settings.exportHint"></p>
-          <textarea id="export-code" class="code" rows="3" readonly dir="ltr" spellcheck="false"></textarea>
-          <div class="row">
-            <button type="button" id="btn-export" class="btn btn--small" data-i18n="settings.export"></button>
-            <button type="button" id="btn-copy" class="btn btn--small" data-i18n="settings.copy"></button>
-          </div>
-          <p class="note" data-i18n="settings.importHint"></p>
-          <textarea id="import-code" class="code" rows="3" dir="ltr" spellcheck="false"
-                    autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
-          <div class="row">
-            <button type="button" id="btn-import" class="btn btn--small" data-i18n="settings.import"></button>
-            <button type="button" id="btn-paste" class="btn btn--small" data-i18n="settings.paste"></button>
-          </div>
-          <p id="transfer-msg" class="note note--live" aria-live="polite"></p>
-        </section>
-
       </div>
     </section>
   </div>
 
-  <!-- ===================================================== the invite -->
-  <div id="ov-invite" class="overlay" hidden>
-    <div class="dialog" role="dialog" aria-modal="true">
-      <h2 data-i18n="invite.title"></h2>
-      <div class="row row--center" id="invite-tabs">
-        <button type="button" id="btn-invite-game" class="btn btn--small" data-i18n="invite.shareGame" hidden></button>
+  <!-- ====================================================== the rules -->
+  <div id="ov-rules" class="overlay overlay--sheet" hidden>
+    <section class="sheet" role="dialog" aria-modal="true">
+      <header class="sheet-head">
+        <h2 data-i18n="rules.title"></h2>
+        <button type="button" class="iconbtn btn-close" data-close="rules" data-i18n-title="common.close">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M6 6 18 18 M18 6 6 18" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </header>
+      <div class="doc-body">
+        <div class="wordmark wordmark--card" id="wm-rules" aria-hidden="true">
+          <span class="wm-line"></span>
+          <span class="wm-line"></span>
+        </div>
+        <div id="rules-body"></div>
       </div>
-      <pre id="invite-text" class="code invite-text"></pre>
-      <p id="invite-msg" class="note note--live" aria-live="polite"></p>
-      <button type="button" id="btn-invite-copy" class="btn btn--primary btn--wide" data-i18n="invite.copy"></button>
-      <button type="button" class="btn btn--wide" data-close="invite" data-i18n="common.close"></button>
+    </section>
+  </div>
+
+  <!-- ====================================================== the share -->
+  <div id="ov-share" class="overlay overlay--sheet" hidden>
+    <section class="sheet" role="dialog" aria-modal="true">
+      <header class="sheet-head">
+        <h2 data-i18n="game.share"></h2>
+        <button type="button" class="iconbtn btn-close" data-close="share" data-i18n-title="common.close">
+          <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path d="M6 6 18 18 M18 6 6 18" fill="none" stroke="currentColor"
+                  stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </header>
+
+      <div class="doc-body" id="share-body">
+        <section class="group">
+          <h4 data-i18n="share.invite"></h4>
+          <pre id="invite-text" class="code code--text"></pre>
+          <button type="button" id="btn-invite" class="btn btn--small"></button>
+        </section>
+
+        <section class="group" id="share-game" hidden>
+          <h4 data-i18n="share.shareGame"></h4>
+          <pre id="share-game-text" class="code code--text code--short"></pre>
+          <button type="button" id="btn-share-game" class="btn btn--small"></button>
+        </section>
+
+        <section class="group">
+          <h4 data-i18n="share.code"></h4>
+          <textarea id="export-code" class="code" rows="2" readonly dir="ltr" spellcheck="false"></textarea>
+          <button type="button" id="btn-copy-code" class="btn btn--small" data-i18n="share.copy"></button>
+        </section>
+
+        <section class="group">
+          <h4 data-i18n="share.load"></h4>
+          <textarea id="import-code" class="code" rows="2" dir="ltr" spellcheck="false"
+                    autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
+          <button type="button" id="btn-load-code" class="btn btn--small" data-i18n="share.loadBtn"></button>
+        </section>
+      </div>
+
+      <p id="share-msg" class="note note--live sheet-foot" aria-live="polite"></p>
+    </section>
+  </div>
+
+  <!-- ========================================= the new game question -->
+  <div id="ov-confirm" class="overlay" hidden>
+    <div class="dialog dialog--ask" role="dialog" aria-modal="true">
+      <p data-i18n="game.confirmNew"></p>
+      <div class="row row--center">
+        <button type="button" id="btn-new-yes" class="btn btn--primary" data-i18n="game.confirmStart"></button>
+        <button type="button" id="btn-new-no" class="btn" data-i18n="common.back"></button>
+      </div>
     </div>
   </div>
 
@@ -241,7 +303,6 @@
       <div id="over-swatch" class="swatch swatch--big"></div>
       <h2 id="over-title"></h2>
       <button type="button" id="btn-again" class="btn btn--primary btn--wide" data-i18n="over.playAgain"></button>
-      <button type="button" id="btn-over-menu" class="btn btn--wide" data-i18n="game.menu"></button>
     </div>
   </div>
 

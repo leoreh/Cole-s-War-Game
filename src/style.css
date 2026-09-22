@@ -3,8 +3,8 @@
    Logical properties everywhere, so the interface mirrors in Hebrew.
    The board itself is always direction: ltr and never mirrors.
 
-   Order: tokens, shell, stage and board, pieces, marks, panel, overlays
-   (menu card, rules sheet, settings drawer, dialogs), form widgets,
+   Order: tokens, shell, stage and board, pieces, marks, panel with its
+   icon bar, overlays (drawers, sheets, dialogs), form widgets,
    EFFECTS (the animations), THEME SHELL (the tone of the page and the
    panel per theme), THEME DECORATION (the board of each theme),
    motion switches.
@@ -91,14 +91,11 @@
 
   /* room the panel takes beside the board and under it */
   --side-space: 330px;
-  --below-space: 250px;
+  --below-space: 268px;
 
   --ov-fast: 0.16s;
   --ov-slow: 0.23s;
 }
-
-/* with no game running the board has the whole stage to itself */
-body.no-game { --side-space: 48px; --below-space: 48px; }
 
 * { box-sizing: border-box; }
 
@@ -168,7 +165,9 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.35),
     0 6px 16px -7px var(--accent-soft);
 }
-.btn--primary:hover { filter: brightness(1.12); }
+/* the hover of .btn is a pseudo-class and outweighs a plain class, so the
+   filled buttons say their own background again */
+.btn--primary:hover { background: var(--accent); filter: brightness(1.12); }
 .btn--heal {
   background: var(--heal);
   color: #06231a;
@@ -177,6 +176,7 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
     0 6px 16px -7px rgba(79, 195, 140, 0.8);
 }
+.btn--heal:hover { background: var(--heal); filter: brightness(1.08); }
 .btn--wide { inline-size: 100%; }
 .btn--small { min-block-size: 38px; padding: 0.42em 0.85em; font-size: 0.92rem; }
 .btn--small.is-on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
@@ -198,6 +198,8 @@ body {
   cursor: pointer;
   transition: background 0.15s ease, transform 0.12s ease;
 }
+/* five of them share the bar under the panel, all the same width */
+.iconbtn--bar { flex: 1 1 0; inline-size: auto; min-inline-size: 0; block-size: 40px; }
 .iconbtn:hover { background: var(--soft-2); transform: translateY(-1px); }
 .iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .iconbtn svg { inline-size: 21px; block-size: 21px; display: block; }
@@ -323,10 +325,6 @@ body {
   mix-blend-mode: var(--board-over-blend, normal);
   opacity: var(--board-over-op, 1);
 }
-
-/* with no game on it the board is only a backdrop */
-body.no-game .board { pointer-events: none; }
-body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
 
 /* coordinates */
 .coord {
@@ -628,10 +626,174 @@ body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
   line-height: 1.35;
 }
 
-.panel-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.panel-actions .btn { flex: 1 1 45%; }
-.panel-actions .btn--primary { flex: 1 1 100%; }
+.panel-bottom { display: flex; flex-direction: column; gap: 10px; }
+
+.panel-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.panel-actions .btn { flex: 1 1 0; min-inline-size: 0; }
 .panel-actions .btn--heal { flex: 1 1 100%; }
+
+/* the five icons in one row, a hairline above them */
+.iconbar {
+  display: flex;
+  gap: 8px;
+  padding-block-start: 10px;
+  border-block-start: 1px solid var(--line);
+}
+
+/* ------------------------------------------------------- the wordmark -- */
+/* Cole's War Game set as a title, not as a label: two lines of system type
+   that differ in size, weight and tracking, a fill clipped to the letters
+   that every theme rewrites through the --wm tokens, and one short entrance
+   on the first render and on a change of theme or of language.
+   Which line is the title and which the credit is decided by ui.js, because
+   English reads the credit over the name and Hebrew reads it under it. */
+
+.wordmark {
+  --wm-title: 1.62rem;
+  --wm-credit: 0.66rem;
+  --wm-fill: linear-gradient(178deg, var(--fg) 8%, var(--muted) 116%);
+  --wm-glow: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45));
+  --wm-credit-fg: var(--muted);
+  --wm-sheen: linear-gradient(104deg,
+    rgba(255, 255, 255, 0) 42%,
+    rgba(255, 255, 255, 0.72) 50%,
+    rgba(255, 255, 255, 0) 58%);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;   /* the start edge: left in English, right in Hebrew */
+  gap: 1px;
+  line-height: 1.05;
+  text-align: start;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.wm-line { display: block; white-space: nowrap; }
+
+/* the large line: the fill is clipped to the letters and the sheen, parked
+   off the word, rides over it once at the entrance */
+.wm-title {
+  font-size: var(--wm-title);
+  font-weight: 800;
+  letter-spacing: -0.015em;
+  background-image: var(--wm-sheen), var(--wm-fill);
+  background-size: 220% 100%, 100% 100%;
+  background-position: -150% 0, 0 0;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: var(--wm-glow);
+  padding-block-end: 0.08em;      /* the descenders keep their room */
+}
+
+.wm-credit {
+  font-size: var(--wm-credit);
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--wm-credit-fg);
+}
+
+/* Hebrew has no case and its letters want no tightening */
+[lang="he"] .wm-title { letter-spacing: 0; }
+[lang="he"] .wm-credit {
+  /* Hebrew has no capitals to carry a small line, so it reads a little larger */
+  font-size: calc(var(--wm-credit) * 1.16);
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-weight: 600;
+}
+
+/* over the panel, under a hairline, the way the icon bar sits over one */
+.wordmark--panel {
+  padding-block-end: 10px;
+  border-block-end: 1px solid var(--line);
+}
+
+/* the title card of the rules sheet */
+.wordmark--card {
+  --wm-title: 2.5rem;
+  --wm-credit: 0.8rem;
+  gap: 3px;
+  margin-block-end: 18px;
+}
+
+/* the entrance: the block rises, the credit follows it, the sheen crosses
+   the title once. Both motion switches turn all three off. */
+.wordmark.is-in { animation: wmRise 380ms cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+.wordmark.is-in .wm-credit { animation: wmFade 300ms ease-out 140ms both; }
+.wordmark.is-in .wm-title { animation: wmSheen 420ms ease-out 70ms both; }
+
+@keyframes wmRise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes wmFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes wmSheen {
+  from { background-position: -150% 0, 0 0; }
+  to { background-position: 250% 0, 0 0; }
+}
+
+/* --- one treatment per theme, tokens only ------------------------------ */
+
+/* classic: brass letters cut into walnut */
+body.theme-classic .wordmark {
+  --wm-fill: linear-gradient(177deg, #fff3cd 0%, #e8c06e 38%, #b2802b 66%, #f4dda1 100%);
+  --wm-glow: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.6)) drop-shadow(0 3px 7px rgba(0, 0, 0, 0.45));
+  --wm-credit-fg: #c6a067;
+}
+
+/* heraldic: a book face, and the only theme whose page is dark while its
+   cards are parchment, so the panel wears gold and the card wears wine */
+body.theme-heraldic .wordmark {
+  --wm-fill: linear-gradient(177deg, #f8e6b4 0%, #dcb465 44%, #a97c22 74%, #f3dfa8 100%);
+  --wm-glow: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.55));
+  --wm-credit-fg: #cfa05a;
+  --wm-sheen: linear-gradient(104deg,
+    rgba(255, 255, 255, 0) 42%, rgba(255, 255, 255, 0.72) 50%, rgba(255, 255, 255, 0) 58%);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+body.theme-heraldic .wordmark--card {
+  --wm-fill: linear-gradient(177deg, #a82c2c 0%, #7d1c1c 52%, #5b1111 100%);
+  --wm-glow: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.7));
+  --wm-credit-fg: #8a6224;
+  --wm-sheen: linear-gradient(104deg,
+    rgba(255, 222, 150, 0) 42%, rgba(255, 222, 150, 0.75) 50%, rgba(255, 222, 150, 0) 58%);
+}
+
+/* ink: one black stroke on paper */
+body.theme-ink .wordmark {
+  --wm-fill: linear-gradient(177deg, #24252b 0%, #101116 100%);
+  --wm-glow: none;
+  --wm-credit-fg: #6f6e67;
+  --wm-sheen: linear-gradient(104deg,
+    rgba(255, 255, 255, 0) 42%, rgba(255, 255, 255, 0.55) 50%, rgba(255, 255, 255, 0) 58%);
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+body.theme-ink .wm-title { letter-spacing: 0.005em; }
+
+/* neon: a lit sign over the board */
+body.theme-neon .wordmark {
+  --wm-fill: linear-gradient(177deg, #ffffff 0%, #b9fbff 30%, #37f0ff 62%, #ff4fd8 100%);
+  --wm-glow: drop-shadow(0 0 5px rgba(55, 240, 255, 0.85))
+             drop-shadow(0 0 16px rgba(55, 240, 255, 0.45));
+  --wm-credit-fg: #7fd8ff;
+}
+
+/* toy: a sticker with a hard shadow */
+body.theme-toy .wordmark {
+  --wm-fill: linear-gradient(177deg, #ff9cb8 0%, #ff6b8a 52%, #ec4a72 100%);
+  --wm-glow: drop-shadow(2px 3px 0 rgba(45, 42, 70, 0.9));
+  --wm-credit-fg: #6a5fd0;
+}
+body.theme-toy .wm-title { letter-spacing: 0.005em; }
+body.theme-toy .wm-credit { letter-spacing: 0.2em; }
 
 /* ------------------------------------------------- portrait and phone -- */
 
@@ -651,8 +813,7 @@ body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
 
 /* a phone: the board takes the width, the panel is a bar under it */
 @media (max-width: 600px) {
-  :root { --below-space: 200px; }
-  body.no-game { --below-space: 30px; }
+  :root { --below-space: 212px; }
   .stage { flex-direction: column; gap: 6px; padding: 4px; }
   .board-wrap {
     --board-size: max(160px, min(calc(var(--vw) - 8px), calc(var(--vh) - var(--below-space))));
@@ -665,25 +826,50 @@ body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
     max-inline-size: none;
     gap: 6px;
   }
-  .panel-top { gap: 6px; }
-  .turn-line { padding: 6px 9px; border-radius: 11px; font-size: 0.92rem; }
+  /* the wordmark shrinks and holds the first row on its own */
+  .wordmark--panel {
+    --wm-title: 1.18rem;
+    --wm-credit: 0.54rem;
+    flex: 1 1 100%;
+    padding-block-end: 6px;
+  }
+  .wordmark--card { --wm-title: 1.85rem; --wm-credit: 0.72rem; margin-block-end: 14px; }
+
+  /* row one: the turn line with the chips beside it. The two bases add up
+     to less than the row, gap included, so they never wrap apart; the chips
+     keep the glyph alone, the one the piece wears on the board */
+  .panel-top { flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .turn-line {
+    flex: 1 1 44%;
+    min-inline-size: 0;
+    gap: 6px;
+    padding: 6px 8px;
+    border-radius: 11px;
+    font-size: 0.92rem;
+  }
+  .turn-line .swatch { inline-size: 1.05em; block-size: 1.05em; border-radius: 5px; }
+  .turn-number { font-size: 0.82rem; }
+  /* the turn line stays one line: a long name is cut, never folded */
+  .turn-name,
+  .turn-number { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .iconbtn { inline-size: 32px; block-size: 32px; }
-  .combo { flex-direction: row; gap: 10px; flex-wrap: wrap; }
-  .combo-label { min-inline-size: 0; }
-  .chip { font-size: 0.78rem; padding: 2px 8px 2px 4px; }
-  [dir="rtl"] .chip { padding: 2px 4px 2px 8px; }
-  .chip-ico { inline-size: 1.4em; block-size: 1.4em; }
-  .panel-msg { font-size: 0.82rem; min-block-size: 1.1em; }
+  .iconbtn--bar { inline-size: auto; block-size: 36px; }
+  .combo { flex: 1 1 48%; min-inline-size: 0; flex-direction: row; gap: 10px; flex-wrap: wrap; }
+  .combo-label { min-inline-size: 0; font-size: 0.78rem; }
+  .chip { font-size: 0.78rem; padding: 2px 5px; }
+  .chip:not(.chip--dim) > span:not(.chip-ico) { display: none; }
+  .chip-ico { inline-size: 1.5em; block-size: 1.5em; }
+  .panel-msg { flex: 1 1 100%; font-size: 0.82rem; min-block-size: 1.1em; }
+  /* row two: End turn and Undo. row three: the icons */
+  .panel-bottom { gap: 6px; }
   .panel-actions { gap: 6px; }
-  .panel-actions .btn,
-  .panel-actions .btn--primary,
-  .panel-actions .btn--heal {
-    flex: 1 1 22%;
+  .panel-actions .btn {
     min-block-size: 40px;
     padding: 0.4em 0.5em;
     font-size: 0.88rem;
     border-radius: 10px;
   }
+  .iconbar { gap: 6px; padding-block-start: 6px; }
 }
 
 /* ---------------------------------------------------------- overlays --- */
@@ -704,48 +890,15 @@ body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
 }
 .overlay.is-open { opacity: 1; }
 .overlay[hidden] { display: none; }
-/* the menu waits behind a sheet, a drawer or a dialog opened from it */
-.overlay--menu.is-under { opacity: 0; pointer-events: none; }
 
-/* the card of the menu and the dialogs */
-.card-pop,
+/* the cards: the question, the merge, the game over */
 .dialog {
   transform: translateY(12px) scale(0.965);
   transition: transform var(--ov-slow) cubic-bezier(0.18, 0.9, 0.28, 1.08);
 }
-.overlay.is-open .card-pop,
 .overlay.is-open .dialog { transform: none; }
 
-.menu {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-  inline-size: min(380px, 100%);
-  max-block-size: 100%;
-  overflow-y: auto;
-  text-align: center;
-  background: var(--card-bg);
-  border: 1px solid var(--line);
-  border-radius: calc(var(--r-card) + 2px);
-  padding: 22px 20px;
-  box-shadow: var(--ov-shadow);
-}
-.menu-title {
-  margin: 0;
-  font-size: clamp(1.7rem, 6vw, 2.6rem);
-  font-weight: 800;
-  letter-spacing: 0.01em;
-  color: var(--title-fg, var(--fg));
-  text-shadow: var(--title-shadow, none);
-}
-.menu-buttons { display: flex; flex-direction: column; gap: 10px; }
-.menu-buttons[hidden] { display: none; }
-.menu-confirm { display: flex; flex-direction: column; gap: 10px; }
-.menu-confirm[hidden] { display: none; }
-.menu-confirm p { margin: 0 0 2px; color: var(--muted); font-size: 0.95rem; }
-
-/* the rules sheet */
+/* the rules sheet and the share sheet */
 .overlay--sheet { padding: 12px; }
 .sheet {
   inline-size: min(760px, 100%);
@@ -773,6 +926,15 @@ body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
   flex: 0 0 auto;
 }
 .sheet-head h2 { margin: 0; font-size: 1.1rem; flex: 1 1 auto; }
+
+/* the line a sheet answers in: it takes no room until there is a word */
+.sheet-foot {
+  flex: 0 0 auto;
+  padding: 9px 18px;
+  border-block-start: 1px solid var(--line);
+  text-align: start;
+}
+.sheet-foot:empty { display: none; }
 
 .doc-body {
   flex: 1 1 auto;
@@ -820,8 +982,8 @@ body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
 }
 .combo-plus { color: var(--muted); }
 
-/* the settings drawer: from the inline end in landscape, from the bottom
-   in portrait, always over the panel and never over the whole board */
+/* the drawers: from the inline end in landscape, from the bottom in
+   portrait, always over the panel and never over the whole board */
 .overlay--drawer {
   padding: 0;
   align-items: stretch;
@@ -927,35 +1089,30 @@ body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
   font-variant-numeric: tabular-nums;
 }
 
-.invite-text {
-  text-align: start;
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-block-size: 40vh;
-  overflow-y: auto;
-  margin: 0;
-}
+/* the small card the New game icon asks in */
+.dialog--ask { inline-size: min(390px, 100%); }
+.dialog--ask .btn { flex: 1 1 0; min-inline-size: 0; padding-inline: 0.7em; }
+
 .row--center { justify-content: center; }
 
 /* --------------------------------------------------- the form widgets -- */
 
-.card {
-  background: var(--soft);
-  border: 1px solid var(--line);
-  border-radius: var(--r-btn);
-  padding: 14px;
-  margin-block-end: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+/* one group of the drawers and of the share sheet: a quiet label over
+   its controls, the same spacing everywhere */
+.group { display: flex; flex-direction: column; gap: 10px; }
+.group + .group {
+  margin-block-start: 18px;
+  padding-block-start: 18px;
+  border-block-start: 1px solid var(--line);
 }
-.card h3 { margin: 0; font-size: 1rem; color: var(--fg); }
-.card h4 {
-  margin: 0.3em 0 -0.2em;
+.group h4 {
+  margin: 0;
   font-size: 0.82rem;
   font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--muted);
 }
+.group .btn--small { align-self: flex-start; }
 
 .themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 8px; }
 .theme-btn {
@@ -1058,6 +1215,18 @@ body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
   resize: vertical;
   word-break: break-all;
 }
+/* the invite message and the link of this game, for copying by hand */
+.code--text {
+  margin: 0;
+  text-align: start;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-block-size: 34vh;
+  overflow-y: auto;
+}
+.code--short { max-block-size: 5.4em; }
+.code--text { resize: none; }
+
 .row { display: flex; gap: 8px; flex-wrap: wrap; }
 
 /* =====================================================================
@@ -1481,7 +1650,6 @@ body.theme-ink {
   --fx-heal-num: #2f6b46;
 }
 /* the ink theme writes in a book face, the whole interface with it */
-body.theme-ink .menu-title,
 body.theme-ink .sheet-head h2,
 body.theme-ink .dialog h2,
 body.theme-ink .float,
@@ -1558,7 +1726,6 @@ body.theme-neon .btn--small.is-on {
     inset 0 0 0 1px rgba(255, 255, 255, 0.5),
     0 0 18px -2px rgba(55, 240, 255, 0.8);
 }
-body.theme-neon .menu,
 body.theme-neon .dialog,
 body.theme-neon .sheet,
 body.theme-neon .drawer {

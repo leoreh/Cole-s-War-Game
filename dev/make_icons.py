@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """make_icons.py - draw the app icons into docs/icons/.
 
-A rounded dark square with the classic emblem on it: a shield with two swords
-crossed behind it, in cream. The emblem is the same geometry as the classic
-glyph in src/themes.js, so the icon on the home screen is the piece in the
-game.
+A rounded dark square with the classic knight on it in cream: the horse head on
+its turned base, the same geometry as the classic glyph in src/themes.js, so
+the icon on the home screen is a piece off the board. The knight, not the pawn,
+because it is the one shape of the set that is still itself at 24 px.
 
 The whole thing is drawn at 8x and shrunk with LANCZOS, because Pillow has no
 antialiasing of its own: polygons and lines come out with hard stair edges at
@@ -76,31 +76,46 @@ def stadium(x, y, w, h, steps=10):
     return pts
 
 
-def rotate(pts, deg, cx=50.0, cy=50.0):
-    a = math.radians(deg)
-    ca, sa = math.cos(a), math.sin(a)
-    return [(cx + (x - cx) * ca - (y - cy) * sa,
-             cy + (x - cx) * sa + (y - cy) * ca) for x, y in pts]
+def disc(cx, cy, r, steps=28):
+    return [(cx + r * math.cos(2 * math.pi * i / steps),
+             cy + r * math.sin(2 * math.pi * i / steps)) for i in range(steps)]
 
 
-def sword(angle):
-    """Pommel, guard and blade, the three shapes of the classic sword."""
-    pommel = stadium(45.5, 4, 9, 15)
-    guard = stadium(34, 17, 32, 9)
-    blade = [(44.5, 25), (55.5, 25), (55.5, 82), (50, 94), (44.5, 82)]
-    return [rotate(p, angle) for p in (pommel, guard, blade)]
-
-
-def shield():
-    """M21,36 H79 V58 C79,75 66,86 50,91 C34,86 21,75 21,58 Z"""
-    pts = [(21, 36), (79, 36), (79, 58)]
-    pts += bezier((79, 58), (79, 75), (66, 86), (50, 91))[1:]
-    pts += bezier((50, 91), (34, 86), (21, 75), (21, 58))[1:]
+def horse():
+    """The head and neck of the classic knight, the glyph's own path."""
+    pts = [(27, 91)]
+    pts += bezier((27, 91), (24, 72), (29, 54), (42, 44))[1:]
+    pts += bezier((42, 44), (50, 38), (55, 29), (56, 20))[1:]
+    pts += bezier((56, 20), (56, 14), (62, 12), (65, 17))[1:]
+    pts += bezier((65, 17), (67, 20), (67, 24), (66, 28))[1:]
+    pts += bezier((66, 28), (71, 22), (78, 23), (82, 29))[1:]
+    pts += bezier((82, 29), (87, 37), (89, 46), (89, 52))[1:]
+    pts += bezier((89, 52), (89, 57), (85, 60), (79, 60))[1:]
+    pts += [(64, 60)]
+    pts += bezier((64, 60), (58, 62), (55, 66), (55, 74))[1:]
+    pts += [(55, 91)]
     return pts
 
 
-SWORDS = sword(38) + sword(-38)
-SHIELD = shield()
+def foot():
+    """M13,90 C13,86 17,83 22,82 H78 C83,83 87,86 87,90 Z"""
+    pts = [(13, 90)]
+    pts += bezier((13, 90), (13, 86), (17, 83), (22, 82))[1:]
+    pts += [(78, 82)]
+    pts += bezier((78, 82), (83, 83), (87, 86), (87, 90))[1:]
+    return pts
+
+
+def shrink(pts, k=0.91, dx=-1.3, dy=-8.9):
+    """The same transform the glyph puts on the head, to sit it on the base."""
+    return [(x * k + dx, y * k + dy) for x, y in pts]
+
+
+HEAD = shrink(horse())
+EYE = shrink(disc(74, 41, 3.5))
+FOOT = foot()
+PLINTH = stadium(24, 71, 52, 12)
+EMBLEM = [HEAD, PLINTH, FOOT]          # painted in this order, as in the glyph
 
 
 # -------------------------------------------------------------- the icons --
@@ -117,9 +132,8 @@ def draw_icon(size, rounded):
         d.rectangle([0, 0, n - 1, n - 1], fill=BG)
 
     # fit the emblem's own bounding box into the safe square in the middle
-    every = SWORDS + [SHIELD]
-    xs = [p[0] for g in every for p in g]
-    ys = [p[1] for g in every for p in g]
+    xs = [p[0] for g in EMBLEM for p in g]
+    ys = [p[1] for g in EMBLEM for p in g]
     x0, x1, y0, y1 = min(xs), max(xs), min(ys), max(ys)
     span = max(x1 - x0, y1 - y0)
     k = n * SAFE / span
@@ -129,16 +143,17 @@ def draw_icon(size, rounded):
     def put(g):
         return [(x * k + ox, y * k + oy) for x, y in g]
 
-    # Every shape in the glyph carries an outline, which is what keeps the two
-    # swords apart and the shield in front of them. Pillow has no stroke, so
-    # each shape is laid down as a thick line of the background along its edge
-    # and then filled: the half of that line outside the shape survives as the
-    # gap, exactly as the SVG stroke does.
-    gap = max(2, int(n * 0.028))
-    for g in SWORDS + [SHIELD]:
+    # Every shape in the glyph carries an outline, which is what keeps the head
+    # off the plinth and the plinth off the foot. Pillow has no stroke, so each
+    # shape is laid down as a thick line of the background along its edge and
+    # then filled: the half of that line outside the shape survives as the gap,
+    # exactly as the SVG stroke does.
+    gap = max(2, int(n * 0.026))
+    for g in EMBLEM:
         pts = put(g)
         d.line(pts + [pts[0]], fill=BG, width=gap, joint='curve')
         d.polygon(pts, fill=FG)
+    d.polygon(put(EYE), fill=BG)
 
     return img.resize((size, size), Image.LANCZOS)
 
