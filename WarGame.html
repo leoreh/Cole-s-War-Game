@@ -1,0 +1,3181 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="format-detection" content="telephone=no">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#141720">
+<title>War Game</title>
+<style>
+/* =====================================================================
+   War Game - all styles.
+   Logical properties everywhere, so the interface mirrors in Hebrew.
+   The board itself is always direction: ltr and never mirrors.
+   ===================================================================== */
+
+/* ------------------------------------------------------------- tokens -- */
+
+:root {
+  /* set from the settings by ui.js */
+  --p0: #efe6cf;
+  --p0-outline: #1b1d24;
+  --p1: #2f3550;
+  --p1-outline: #f5f3ee;
+  --sq-light: #efe0c3;
+  --sq-dark: #a97e57;
+
+  /* the shell */
+  --bg: #141720;
+  --bg-2: #1e2230;
+  --bg-3: #272c3c;
+  --fg: #f3f2ef;
+  --muted: #a3abbd;
+  --line: rgba(255, 255, 255, 0.14);
+  --accent: #6fa8ff;
+  --accent-ink: #0b1220;
+  --accent-soft: rgba(111, 168, 255, 0.34);
+  --danger: #e75b4d;
+  --danger-soft: rgba(231, 91, 77, 0.34);
+  --fire: #eb9b26;
+  --fire-soft: rgba(235, 155, 38, 0.34);
+  --heal: #4fc38c;
+
+  /* one family for every mark drawn on a square */
+  --ring-w: calc(var(--sq) * 0.055);
+  --ring-glow: calc(var(--sq) * 0.2);
+
+  /* viewport in px, kept fresh by ui.js; the fallbacks work on their own */
+  --vh: 100vh;
+  --vw: 100vw;
+  /* one board square in px, set by ui.js */
+  --sq: 40px;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.4;
+  overscroll-behavior: none;
+}
+
+#app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  padding-block-start: env(safe-area-inset-top);
+  padding-block-end: env(safe-area-inset-bottom);
+  padding-inline-start: env(safe-area-inset-left);
+  padding-inline-end: env(safe-area-inset-right);
+  background:
+    radial-gradient(120% 90% at 50% -10%, #1d2233 0%, var(--bg) 60%);
+}
+
+/* ------------------------------------------------------------ screens -- */
+
+.screen { display: none; flex: 1 1 auto; min-width: 0; min-height: 0; }
+.screen.is-active { display: flex; }
+
+/* -------------------------------------------------------------- menu --- */
+
+.screen--menu.is-active {
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  inline-size: min(380px, 100%);
+  text-align: center;
+}
+
+.menu-title {
+  margin: 0;
+  font-size: clamp(2rem, 7vw, 3.1rem);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+}
+
+.menu-buttons { display: flex; flex-direction: column; gap: 10px; }
+
+.lang-switch { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+
+/* ------------------------------------------------------------ buttons -- */
+
+.btn {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--fg);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 0.62em 1.05em;
+  min-block-size: 44px;
+  cursor: pointer;
+  touch-action: manipulation;
+  text-align: center;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: background 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+}
+.btn:hover { background: var(--bg-3); }
+.btn:active {
+  background: var(--bg-3);
+  transform: translateY(1px);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn:disabled { opacity: 0.32; cursor: default; transform: none; box-shadow: none; }
+.btn--primary {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+  font-weight: 700;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 6px 16px -7px rgba(111, 168, 255, 0.85);
+}
+.btn--primary:hover { background: #8bb9ff; }
+.btn--heal {
+  background: var(--heal);
+  color: #06231a;
+  border-color: transparent;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 6px 16px -7px rgba(79, 195, 140, 0.8);
+}
+.btn--ghost { background: transparent; border-color: transparent; box-shadow: none; }
+.btn--wide { inline-size: 100%; }
+.btn--small { min-block-size: 38px; padding: 0.42em 0.85em; font-size: 0.92rem; }
+
+.lang-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--fg);
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0.45em 1.1em;
+  min-block-size: 40px;
+  cursor: pointer;
+}
+.lang-btn.is-on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+
+.icon-back { display: inline-block; margin-inline-end: 6px; }
+[dir="rtl"] .icon-back { transform: scaleX(-1); }
+
+/* --------------------------------------------------------- game layout - */
+
+.game {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 10px;
+  min-inline-size: 0;
+  min-block-size: 0;
+  overflow: hidden;
+}
+
+.board-wrap {
+  --board-size: max(180px, min(calc(var(--vh) - 22px), calc(var(--vw) - 330px)));
+  flex: 0 0 auto;
+  inline-size: var(--board-size);
+  block-size: var(--board-size);
+}
+
+.panel {
+  flex: 0 1 280px;
+  min-inline-size: 190px;
+  max-inline-size: 320px;
+  max-block-size: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  overflow-y: auto;
+}
+
+@media (orientation: portrait) {
+  .game { flex-direction: column; gap: 10px; }
+  .board-wrap {
+    --board-size: max(180px, min(calc(var(--vw) - 18px), calc(var(--vh) - 250px)));
+  }
+  .panel {
+    flex: 0 0 auto;
+    inline-size: min(100%, 560px);
+    max-inline-size: none;
+  }
+  .panel-actions .btn { flex: 1 1 22%; }
+  .panel-actions .btn--primary { flex: 1 1 22%; }
+}
+
+/* ---------------------------------------------------------- the board -- */
+
+.board {
+  /* the frame is the border: the squares fill the padding box, so the
+     square size ui.js measures stays the width of the grid itself */
+  --frame-w: clamp(4px, calc(var(--board-size, 480px) * 0.018), 11px);
+  position: relative;
+  direction: ltr;
+  inline-size: 100%;
+  block-size: 100%;
+  border: var(--frame-w) solid transparent;
+  border-radius: 16px;
+  background-image: linear-gradient(155deg, #4a5166 0%, #262c3c 46%, #151925 100%);
+  overflow: hidden;
+  box-shadow:
+    0 22px 50px -14px rgba(0, 0, 0, 0.72),
+    0 0 0 1px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* the board sinks into its frame */
+.board::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 0, 0, 0.38),
+    inset 0 7px 12px -8px rgba(0, 0, 0, 0.75),
+    inset 0 -7px 12px -8px rgba(0, 0, 0, 0.45);
+}
+
+.squares {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+}
+
+.sq { position: relative; }
+.sq--light { background: var(--sq-light); }
+.sq--dark { background: var(--sq-dark); }
+
+.layer { position: absolute; inset: 0; pointer-events: none; }
+
+/* coordinates */
+.coord {
+  position: absolute;
+  font-size: calc(var(--sq) * 0.16);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  opacity: 0.45;
+  pointer-events: none;
+}
+.coord--file { inset-block-end: 6%; inset-inline-end: 8%; }
+.coord--rank { inset-block-start: 6%; inset-inline-start: 8%; }
+.sq--light .coord { color: rgba(0, 0, 0, 0.8); }
+.sq--dark .coord { color: rgba(255, 255, 255, 0.9); }
+.board:not(.board--coords) .coord { display: none; }
+
+/* selection and hover */
+.sq--sel {
+  box-shadow:
+    inset 0 0 0 var(--ring-w) var(--accent),
+    inset 0 0 var(--ring-glow) var(--accent-soft);
+}
+@media (hover: hover) {
+  .sq--act:hover::before {
+    content: "";
+    position: absolute;
+    inset: 8%;
+    border-radius: 50%;
+    box-shadow:
+      inset 0 0 0 calc(var(--ring-w) * 0.6) rgba(255, 255, 255, 0.5),
+      inset 0 0 var(--ring-glow) rgba(255, 255, 255, 0.16);
+  }
+}
+
+/* ------------------------------------------------------------- pieces -- */
+
+.pc {
+  position: absolute;
+  inset-block-start: 0;
+  left: 0;
+  inline-size: 12.5%;
+  block-size: 12.5%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.26s cubic-bezier(0.3, 0.7, 0.3, 1), opacity 0.22s linear;
+}
+.pc--used .piece { opacity: 0.45; filter: saturate(0.65); }
+
+.piece {
+  position: relative;
+  display: block;
+  inline-size: 88%;
+  block-size: 88%;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+}
+.piece[data-owner="0"] { color: var(--p0); --piece-outline: var(--p0-outline); }
+.piece[data-owner="1"] { color: var(--p1); --piece-outline: var(--p1-outline); }
+
+.glyph { display: block; inline-size: 100%; block-size: 100%; overflow: visible; }
+.piece > .glyph { position: absolute; inset: 0; }
+
+.piece-sub {
+  position: absolute;
+  inset-block-start: -7%;
+  inset-inline-end: -7%;
+  inline-size: 44%;
+  block-size: 44%;
+}
+
+/* a small pill in the piece's own outline tone: dark on a light piece,
+   light on a dark one, so it always reads without shouting */
+.badge {
+  position: absolute;
+  inset-block-end: -3%;
+  inset-inline-start: -3%;
+  min-inline-size: 34%;
+  block-size: 30%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 0.3em;
+  border-radius: 999px;
+  background: var(--piece-outline, #171a22);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.22);
+  font-size: calc(var(--sq) * 0.2);
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+}
+.badge--hurt {
+  background: #e3a92f;
+  color: #2a1a03;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+}
+
+/* -------------------------------------------------------- move marks --- */
+
+.mark {
+  position: absolute;
+  inset-block-start: 0;
+  left: 0;
+  inline-size: 12.5%;
+  block-size: 12.5%;
+}
+.mark--move::after {
+  content: "";
+  position: absolute;
+  inset: 38%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.2),
+    0 0 var(--ring-glow) rgba(255, 255, 255, 0.35),
+    0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.mark--attack::after,
+.mark--fire::after {
+  content: "";
+  position: absolute;
+  inset: 7%;
+  border-radius: 50%;
+  border: var(--ring-w) solid var(--danger);
+  box-shadow:
+    0 0 var(--ring-glow) var(--danger-soft),
+    inset 0 0 var(--ring-glow) var(--danger-soft);
+}
+.mark--fire::after {
+  border-color: var(--fire);
+  box-shadow:
+    0 0 var(--ring-glow) var(--fire-soft),
+    inset 0 0 var(--ring-glow) var(--fire-soft);
+}
+.bowmark {
+  position: absolute;
+  inset-block-start: 2%;
+  inset-inline-end: 2%;
+  inline-size: 32%;
+  block-size: 32%;
+  color: var(--fire);
+  --piece-outline: #2a1a05;
+  /* the bow itself takes the tap, so a target that may be both attacked and
+     fired at still offers the two */
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------- the panel -- */
+
+.panel-top { display: flex; flex-direction: column; gap: 12px; }
+
+.turn-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 11px 13px;
+  font-weight: 700;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 2px 10px -6px rgba(0, 0, 0, 0.8);
+}
+.turn-name { flex: 1 1 auto; }
+.turn-number { color: var(--muted); font-weight: 600; font-size: 0.9rem; }
+
+.swatch {
+  display: inline-block;
+  inline-size: 1.25em;
+  block-size: 1.25em;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  flex: 0 0 auto;
+}
+.swatch--big {
+  inline-size: 56px;
+  block-size: 56px;
+  border-radius: 16px;
+  margin-inline: auto;
+}
+
+.combo { display: flex; flex-direction: column; gap: 8px; }
+.combo-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.combo-label { color: var(--muted); font-size: 0.85rem; min-inline-size: 5.5em; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+[dir="rtl"] .chip { padding: 4px 6px 4px 10px; }
+.chip--dim { opacity: 0.4; }
+.chip-ico {
+  position: relative;
+  display: block;
+  inline-size: 1.65em;
+  block-size: 1.65em;
+  flex: 0 0 auto;
+  color: var(--fg);
+  --piece-outline: rgba(0, 0, 0, 0.6);
+}
+
+.panel-msg {
+  margin: 0;
+  min-block-size: 1.3em;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.panel-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.panel-actions .btn { flex: 1 1 45%; }
+.panel-actions .btn--primary { flex: 1 1 100%; }
+.panel-actions .btn--heal { flex: 1 1 100%; }
+
+/* ----------------------------------------------- rules and settings ---- */
+
+.screen--doc.is-active { flex-direction: column; }
+
+.doc-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-block-end: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+.doc-head h2 { margin: 0; font-size: 1.15rem; }
+
+.doc-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px 16px 40px;
+  inline-size: 100%;
+  max-inline-size: 780px;
+  margin-inline: auto;
+}
+
+.doc-body h3 {
+  margin: 1.5em 0 0.4em;
+  font-size: 1.1rem;
+  color: var(--accent);
+}
+.doc-body h3:first-child { margin-block-start: 0.2em; }
+.doc-body p { margin: 0 0 0.7em; line-height: 1.7; color: #e2e3e8; text-align: start; }
+.doc-body ul { margin: 0 0 1em; padding-inline-start: 1.25em; line-height: 1.7; color: #e2e3e8; }
+.doc-body li { margin-block-end: 0.25em; }
+
+.rules-table { inline-size: 100%; border-collapse: collapse; margin: 0.3em 0 1em; }
+.rules-table th,
+.rules-table td {
+  text-align: start;
+  padding: 9px 10px;
+  border-block-end: 1px solid var(--line);
+}
+.rules-table th { color: var(--muted); font-size: 0.85rem; font-weight: 600; }
+.rules-table .num { text-align: center; font-variant-numeric: tabular-nums; }
+.rules-table .cell-piece { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+
+.combo-list { display: flex; flex-direction: column; gap: 7px; margin: 0.3em 0 1em; }
+.combo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 8px 10px;
+}
+.combo-plus { color: var(--muted); }
+
+.card {
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 14px;
+  margin-block-end: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.card h3 { margin: 0; font-size: 1rem; color: var(--fg); }
+
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-size: 0.92rem;
+}
+.field input[type="color"] {
+  inline-size: 56px;
+  block-size: 34px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.switch { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem; }
+.switch input { inline-size: 22px; block-size: 22px; accent-color: var(--accent); flex: 0 0 auto; }
+
+.presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+.preset {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--fg);
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 44px;
+}
+.preset-swatches { display: flex; flex: 0 0 auto; border-radius: 6px; overflow: hidden; }
+.preset-swatches i { inline-size: 12px; block-size: 22px; display: block; }
+
+.note { margin: 0; color: var(--muted); font-size: 0.85rem; line-height: 1.5; }
+.note--live { min-block-size: 1.2em; color: var(--accent); }
+
+.code {
+  inline-size: 100%;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--fg);
+  background: #11141d;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+  resize: vertical;
+  word-break: break-all;
+}
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------------------------------------------------------- overlays --- */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(8, 10, 16, 0.74);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+.overlay[hidden] { display: none; }
+
+.dialog {
+  inline-size: min(430px, 100%);
+  max-block-size: 100%;
+  overflow-y: auto;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+}
+.dialog h2 { margin: 0; font-size: 1.25rem; }
+.dialog p { margin: 0; color: var(--muted); font-size: 0.92rem; line-height: 1.5; }
+
+.merge-piece {
+  position: relative;
+  inline-size: 92px;
+  block-size: 92px;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.merge-choices { display: flex; gap: 8px; }
+.merge-choice {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  color: var(--fg);
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+  cursor: pointer;
+}
+.merge-choice:hover { background: rgba(255, 255, 255, 0.1); }
+.merge-choice .chip-ico {
+  inline-size: 44px;
+  block-size: 44px;
+  color: var(--p-cur, var(--fg));
+  --piece-outline: var(--p-cur-outline, rgba(0, 0, 0, 0.6));
+}
+.merge-name { font-weight: 700; font-size: 0.95rem; }
+.merge-stats {
+  font-size: 0.74rem;
+  color: var(--muted);
+  line-height: 1.4;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ------------------------------------------------------------ effects -- */
+
+.fx { overflow: hidden; }
+
+.float {
+  position: absolute;
+  font-weight: 800;
+  font-size: calc(var(--sq) * 0.4);
+  line-height: 1;
+  color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  animation: floatUp 0.72s ease-out forwards;
+  white-space: nowrap;
+}
+.float--loss { color: #ff8d7f; }
+.float--heal { color: #7bf0bb; }
+
+@keyframes floatUp {
+  0% { opacity: 0; transform: translate(-50%, -30%) scale(0.85); }
+  18% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -165%) scale(1.05); }
+}
+
+.shot {
+  position: absolute;
+  block-size: calc(var(--sq) * 0.085);
+  border-radius: 99px;
+  background: linear-gradient(90deg, rgba(235, 155, 38, 0), var(--fire));
+  transform-origin: 0 50%;
+  animation: shotFly 0.26s ease-out forwards;
+}
+@keyframes shotFly {
+  from { transform: rotate(var(--ang)) scaleX(0); opacity: 0.2; }
+  to { transform: rotate(var(--ang)) scaleX(1); opacity: 1; }
+}
+
+.hitflash {
+  position: absolute;
+  inset-block-start: 0;
+  left: 0;
+  inline-size: 12.5%;
+  block-size: 12.5%;
+  border-radius: 12%;
+  background: rgba(255, 255, 255, 0.65);
+  animation: flashOut 0.3s ease-out forwards;
+}
+@keyframes flashOut {
+  from { opacity: 0.8; }
+  to { opacity: 0; }
+}
+
+.ring {
+  position: absolute;
+  border-radius: 50%;
+  border: calc(var(--sq) * 0.06) solid var(--heal);
+  animation: ringPulse 0.55s ease-out forwards;
+}
+@keyframes ringPulse {
+  from { transform: scale(0.45); opacity: 0.95; }
+  to { transform: scale(1.3); opacity: 0; }
+}
+
+.spark {
+  position: absolute;
+  inline-size: calc(var(--sq) * 0.13);
+  block-size: calc(var(--sq) * 0.13);
+  border-radius: 50%;
+  animation: sparkOut 0.5s ease-out forwards;
+}
+@keyframes sparkOut {
+  from { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+  to { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.2); opacity: 0; }
+}
+
+.banner {
+  position: absolute;
+  inset-block-start: 41%;
+  left: 0;
+  right: 0;
+  block-size: 18%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--sq) * 0.5);
+  font-weight: 800;
+  opacity: 0;
+  pointer-events: none;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
+}
+.banner.is-on { animation: bannerSweep 0.75s ease-in-out; }
+@keyframes bannerSweep {
+  0% { opacity: 0; transform: translateX(-24%); }
+  22% { opacity: 1; transform: none; }
+  72% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateX(24%); }
+}
+
+.heal-btn {
+  position: absolute;
+  inset-block-start: 0;
+  left: 0;
+  inline-size: 12.5%;
+  block-size: 12.5%;
+  /* only the pill takes the tap, so the rest of the square still deselects */
+  pointer-events: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding-block-end: 2%;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.heal-btn span {
+  display: block;
+  pointer-events: auto;
+  padding: 0.15em 0.55em;
+  border-radius: 999px;
+  background: var(--heal);
+  color: #06231a;
+  font-size: calc(var(--sq) * 0.24);
+  font-weight: 800;
+  line-height: 1.5;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------- motion switches --- */
+
+.no-anim *,
+.no-anim *::before,
+.no-anim *::after {
+  animation: none !important;
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ============================================================= menu -->
+  <section id="screen-menu" class="screen screen--menu is-active">
+    <div class="menu">
+      <h1 class="menu-title" data-i18n="app.title"></h1>
+      <div class="menu-buttons">
+        <button type="button" id="btn-new" class="btn btn--primary btn--wide" data-i18n="menu.newGame"></button>
+        <button type="button" id="btn-continue" class="btn btn--wide" data-i18n="menu.continue" hidden></button>
+        <button type="button" id="btn-rules" class="btn btn--wide" data-i18n="menu.rules"></button>
+        <button type="button" id="btn-settings" class="btn btn--wide" data-i18n="menu.settings"></button>
+      </div>
+      <div class="lang-switch" id="lang-switch-menu"></div>
+    </div>
+  </section>
+
+  <!-- ============================================================= game -->
+  <section id="screen-game" class="screen screen--game">
+    <div class="game">
+      <div class="board-wrap">
+        <div id="board" class="board">
+          <div id="squares" class="squares"></div>
+          <div id="pieces" class="layer pieces"></div>
+          <div id="marks" class="layer marks"></div>
+          <div id="fx" class="layer fx"></div>
+          <div id="banner" class="banner" aria-hidden="true"></div>
+        </div>
+      </div>
+
+      <aside class="panel">
+        <div class="panel-top">
+          <div class="turn-line">
+            <span id="turn-swatch" class="swatch"></span>
+            <span id="turn-name" class="turn-name"></span>
+            <span id="turn-number" class="turn-number"></span>
+          </div>
+          <div class="combo">
+            <div class="combo-row">
+              <span class="combo-label" data-i18n="panel.used"></span>
+              <span id="combo-used" class="chips"></span>
+            </div>
+            <div class="combo-row">
+              <span class="combo-label" data-i18n="panel.available"></span>
+              <span id="combo-avail" class="chips"></span>
+            </div>
+          </div>
+          <p id="panel-msg" class="panel-msg" aria-live="polite"></p>
+        </div>
+        <div class="panel-actions">
+          <button type="button" id="btn-heal" class="btn btn--heal" data-i18n="action.heal" hidden></button>
+          <button type="button" id="btn-endturn" class="btn btn--primary" data-i18n="game.endTurn"></button>
+          <button type="button" id="btn-undo" class="btn" data-i18n="game.undo"></button>
+          <button type="button" id="btn-gamemenu" class="btn" data-i18n="game.menu"></button>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ============================================================ rules -->
+  <section id="screen-rules" class="screen screen--doc">
+    <header class="doc-head">
+      <button type="button" class="btn btn--ghost btn-back" data-go="menu">
+        <span class="icon-back" aria-hidden="true">&#8592;</span>
+        <span data-i18n="common.back"></span>
+      </button>
+      <h2 data-i18n="rules.title"></h2>
+    </header>
+    <div id="rules-body" class="doc-body"></div>
+  </section>
+
+  <!-- ========================================================= settings -->
+  <section id="screen-settings" class="screen screen--doc">
+    <header class="doc-head">
+      <button type="button" class="btn btn--ghost btn-back" data-go="menu">
+        <span class="icon-back" aria-hidden="true">&#8592;</span>
+        <span data-i18n="common.back"></span>
+      </button>
+      <h2 data-i18n="settings.title"></h2>
+    </header>
+
+    <div class="doc-body">
+
+      <section class="card">
+        <h3 data-i18n="settings.language"></h3>
+        <div class="lang-switch" id="lang-switch-settings"></div>
+      </section>
+
+      <section class="card">
+        <h3 data-i18n="settings.presets"></h3>
+        <div class="presets" id="presets"></div>
+      </section>
+
+      <section class="card">
+        <h3 data-i18n="settings.colors"></h3>
+        <div class="fields">
+          <label class="field">
+            <span data-i18n="settings.p0"></span>
+            <input type="color" id="set-p0">
+          </label>
+          <label class="field">
+            <span data-i18n="settings.p1"></span>
+            <input type="color" id="set-p1">
+          </label>
+          <label class="field">
+            <span data-i18n="settings.sqLight"></span>
+            <input type="color" id="set-light">
+          </label>
+          <label class="field">
+            <span data-i18n="settings.sqDark"></span>
+            <input type="color" id="set-dark">
+          </label>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="set-random">
+          <span data-i18n="settings.randomBoard"></span>
+        </label>
+        <button type="button" id="btn-reshuffle" class="btn btn--small" data-i18n="settings.reshuffle"></button>
+      </section>
+
+      <section class="card">
+        <h3 data-i18n="settings.display"></h3>
+        <label class="switch">
+          <input type="checkbox" id="set-anim">
+          <span data-i18n="settings.animations"></span>
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="set-coords">
+          <span data-i18n="settings.coordinates"></span>
+        </label>
+      </section>
+
+      <section class="card">
+        <h3 data-i18n="settings.gameRules"></h3>
+        <label class="switch">
+          <input type="checkbox" id="set-diagfire">
+          <span data-i18n="settings.diagonalFire"></span>
+        </label>
+        <label class="switch">
+          <input type="checkbox" id="set-jump">
+          <span data-i18n="settings.knightsJump"></span>
+        </label>
+        <p class="note" data-i18n="settings.rulesNote"></p>
+      </section>
+
+      <section class="card">
+        <h3 data-i18n="settings.transfer"></h3>
+        <p class="note" data-i18n="settings.exportHint"></p>
+        <textarea id="export-code" class="code" rows="3" readonly dir="ltr" spellcheck="false"></textarea>
+        <div class="row">
+          <button type="button" id="btn-export" class="btn btn--small" data-i18n="settings.export"></button>
+          <button type="button" id="btn-copy" class="btn btn--small" data-i18n="settings.copy"></button>
+        </div>
+        <p class="note" data-i18n="settings.importHint"></p>
+        <textarea id="import-code" class="code" rows="3" dir="ltr" spellcheck="false"
+                  autocapitalize="off" autocomplete="off" autocorrect="off"></textarea>
+        <div class="row">
+          <button type="button" id="btn-import" class="btn btn--small" data-i18n="settings.import"></button>
+          <button type="button" id="btn-paste" class="btn btn--small" data-i18n="settings.paste"></button>
+        </div>
+        <p id="transfer-msg" class="note note--live" aria-live="polite"></p>
+      </section>
+
+    </div>
+  </section>
+
+  <!-- ===================================================== merge dialog -->
+  <div id="overlay-merge" class="overlay" hidden>
+    <div class="dialog" role="dialog" aria-modal="true">
+      <h2 data-i18n="merge.title"></h2>
+      <div id="merge-piece" class="merge-piece"></div>
+      <p data-i18n="merge.text"></p>
+      <div id="merge-choices" class="merge-choices"></div>
+      <button type="button" id="btn-merge-skip" class="btn btn--wide" data-i18n="merge.keep"></button>
+    </div>
+  </div>
+
+  <!-- ======================================================== game over -->
+  <div id="overlay-over" class="overlay" hidden>
+    <div class="dialog dialog--over" role="dialog" aria-modal="true">
+      <div id="over-swatch" class="swatch swatch--big"></div>
+      <h2 id="over-title"></h2>
+      <button type="button" id="btn-again" class="btn btn--primary btn--wide" data-i18n="over.playAgain"></button>
+      <button type="button" id="btn-over-menu" class="btn btn--wide" data-i18n="game.menu"></button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* i18n.js - all user visible strings, Hebrew and English.
+   window.WarGame.I18N = { langs, current, set(lang), t(key, vars) } */
+
+window.WarGame = window.WarGame || {};
+
+(function () {
+  'use strict';
+
+  /* ---------------------------------------------------------------- Hebrew */
+
+  var he = {
+    'app.title': 'משחק מלחמה',
+
+    'menu.newGame': 'משחק חדש',
+    'menu.continue': 'המשך',
+    'menu.rules': 'חוקים',
+    'menu.settings': 'הגדרות',
+
+    'game.endTurn': 'סיום תור',
+    'game.undo': 'ביטול',
+    'game.menu': 'תפריט',
+    'game.turn': 'תור {n}',
+
+    'player.0': 'שחקן 1',
+    'player.1': 'שחקן 2',
+
+    'kind.S': 'חייל',
+    'kind.K': 'פרש',
+    'kind.A': 'קשת',
+
+    'action.move': 'תנועה',
+    'action.attack': 'תקיפה',
+    'action.fire': 'ירי',
+    'action.heal': 'ריפוי',
+    'action.merge': 'מיזוג',
+
+    'stat.piece': 'כלי',
+    'stat.str': 'כוח',
+    'stat.move': 'תנועה',
+    'stat.fire': 'ירי',
+    'stat.range': 'טווח',
+    'stat.none': '—',
+
+    'panel.used': 'הופעלו',
+    'panel.available': 'אפשר עוד',
+    'panel.nothing': 'אין',
+
+    'msg.start': '{name} פותח',
+    'msg.used': 'הכלי כבר פעל בתור הזה',
+    'msg.comboFull': 'אין מקום לעוד {kind} בתור הזה',
+    'msg.cannot': 'הכלי לא יכול לפעול עכשיו',
+    'msg.pass': 'ל{name} אין מהלך אפשרי, התור עובר',
+    'msg.pending': 'צריך להשלים את המיזוג',
+
+    'merge.title': 'מיזוג',
+    'merge.text': 'הכלי הגיע לשורה האחרונה ואפשר למזג אותו עם סוג נוסף.',
+    'merge.keep': 'להשאיר כמו שהוא',
+
+    'over.win': 'המנצח: {name}',
+    'over.draw': 'תיקו',
+    'over.playAgain': 'משחק נוסף',
+
+    'rules.title': 'חוקים',
+
+    'settings.title': 'הגדרות',
+    'settings.language': 'שפה',
+    'settings.colors': 'צבעים',
+    'settings.p0': 'צבע שחקן 1',
+    'settings.p1': 'צבע שחקן 2',
+    'settings.sqLight': 'משבצת בהירה',
+    'settings.sqDark': 'משבצת כהה',
+    'settings.randomBoard': 'לוח צבעוני אקראי',
+    'settings.reshuffle': 'ערבוב מחדש',
+    'settings.presets': 'ערכות צבע',
+    'settings.display': 'תצוגה',
+    'settings.animations': 'אנימציות',
+    'settings.coordinates': 'קואורדינטות',
+    'settings.gameRules': 'אפשרויות משחק',
+    'settings.diagonalFire': 'ירי באלכסון',
+    'settings.knightsJump': 'פרשים מדלגים',
+    'settings.rulesNote': 'האפשרויות יחולו במשחק הבא',
+    'settings.transfer': 'העברת משחק',
+    'settings.export': 'ייצוא משחק',
+    'settings.import': 'ייבוא משחק',
+    'settings.copy': 'העתקה',
+    'settings.paste': 'הדבקה',
+    'settings.exportHint': 'הקוד של המשחק הנוכחי. אפשר להעתיק אותו ולפתוח אותו במכשיר אחר.',
+    'settings.importHint': 'כאן מדביקים קוד של משחק.',
+    'settings.copied': 'הקוד הועתק',
+    'settings.copyFail': 'ההעתקה לא הצליחה, אפשר לסמן את הקוד ולהעתיק ידנית',
+    'settings.imported': 'המשחק נטען',
+    'settings.importBad': 'הקוד אינו תקין',
+    'settings.noGame': 'אין משחק לייצוא',
+    'settings.pasteFail': 'הדפדפן לא נתן גישה ללוח הגזירים, אפשר להדביק בשדה ידנית',
+
+    'preset.wood': 'עץ',
+    'preset.marble': 'שיש',
+    'preset.forest': 'יער',
+    'preset.ocean': 'אוקיינוס',
+    'preset.rose': 'ורד',
+    'preset.night': 'לילה',
+
+    'common.back': 'חזרה',
+
+    rules: [
+      ['h', 'המשחק'],
+      ['p', 'משחק מלחמה הוא משחק לשני שחקנים על מכשיר אחד, על לוח של 8 על 8. לכל שחקן שישה עשר כלים, ומנצחים כשלא נשאר ליריב אף כלי.'],
+
+      ['h', 'הפתיחה'],
+      ['p', 'שחקן 1 נערך בשלוש השורות הקרובות ומתקדם אל הצד הרחוק, ושחקן 2 נערך בשלוש השורות הרחוקות ומתקדם אל הצד הקרוב. בכל צבא שמונה חיילים בשורה האחורית, ארבעה פרשים לפניהם וארבעה קשתים לפני הפרשים. מי פותח נקבע בהגרלה.'],
+
+      ['h', 'הכלים'],
+      ['pieceTable'],
+      ['p', 'הכוח הוא כוחו של הכלי בתקיפה, והוא משתנה במהלך המשחק בקפיצות של חצי נקודה. לכל כלי יש כוח נוכחי וכוח מרבי, וכלי שכוחו יורד לאפס או פחות מת ויורד מהלוח. לקשת אין כוח תקיפה: הוא אינו תוקף בכלל, וכל תקיפה עליו הורגת אותו.'],
+
+      ['h', 'תנועה'],
+      ['p', 'כלי נע בקו ישר למעלה, למטה, ימינה או שמאלה, ממשבצת אחת ועד מספר המשבצות של התנועה שלו. כל המשבצות בדרך חייבות להיות פנויות, ואסור לעצור על משבצת של כלי מאותו צבא. כשהאפשרות "פרשים מדלגים" מופעלת, פרש עובר מעל כלים בדרך. גם כלאיים שיש בהם פרש מדלגים.'],
+
+      ['h', 'תקיפה'],
+      ['p', 'תנועה אל משבצת של כלי יריב היא תקיפה, והדרך אליה צריכה להיות פנויה בדיוק כמו בתנועה רגילה. כל צד מאבד את כוחו של הצד השני: התוקף מאבד את כוח המגן והמגן מאבד את כוח התוקף, ולכן לכל היותר אחד מהשניים שורד. אם המגן מת והתוקף נשאר בחיים, התוקף נכנס למשבצת. אם התוקף מת, המגן נשאר במקומו.'],
+      ['ul', [
+        'חייל תוקף חייל: שניהם מתים.',
+        'פרש (3) תוקף חייל (1): החייל מת ולפרש נשארים 2.',
+        'חייל (1) תוקף פרש (3): החייל מת ולפרש נשארים 2.',
+        'חייל (1) תוקף פרש שכוחו 1: שניהם מתים.',
+        'פרש שכוחו 2 תוקף פרש שכוחו 3: התוקף מת ולמגן נשאר 1.',
+        'כל תקיפה על קשת הורגת אותו ולא עולה לתוקף דבר.'
+      ]],
+
+      ['h', 'ירי'],
+      ['p', 'קשת יורה בכלי יריב שנמצא בטווח שלו. המטרה מאבדת 2, הקשת לא זז ולא נפגע, והירי עובר מעל כלים אחרים. כל כלי שיש לו כוח ירי יורה באותו אופן, ולכן גם כלאיים שיש בהם קשת יורים. כברירת מחדל הירי מותר בכל כיוון, גם באלכסון. כשהאפשרות "ירי באלכסון" כבויה, המטרה חייבת להיות באותה שורה או באותה עמודה. הטווח נמדד לפי הגדול מבין המרחק בשורות והמרחק בעמודות, וכשהאפשרות כבויה לפי המרחק לאורך השורה או העמודה.'],
+
+      ['h', 'התור'],
+      ['p', 'בתור מפעילים כלים אחד אחד. כלי שהופעל עושה פעולה אחת בלבד, תנועה או תקיפה או ירי, ואז הוא נעול עד סוף התור. אי אפשר להפעיל כל צירוף שרוצים: הכלים שפועלים בתור אחד חייבים להתאים לאחד הצירופים האלה.'],
+      ['combos'],
+      ['p', 'מותר תמיד להפעיל פחות כלים. מכאן שבתור אחד פועל פרש אחד לכל היותר, וכשפועל פרש נשאר מקום לכלי אחד בלבד. כלאיים נספרים לפי הפרש שבהם, ואם אין בהם פרש לפי הקשת שבהם, ואם אין גם קשת לפי החייל. התור נגמר בלחיצה על "סיום תור", ועד אז אפשר לבטל את הפעולות אחת אחת.'],
+
+      ['h', 'ריפוי'],
+      ['p', 'בכל תור אפשר לרפא כמה כלים פצועים שרוצים, והריפוי אינו נספר בצירופים. ריפוי מוסיף חצי נקודת כוח, ולא מעבר לכוח המרבי של הכלי. כלי שמתרפא לא עושה שום דבר אחר באותו תור, וכלי שכבר פעל אינו יכול להתרפא.'],
+
+      ['h', 'מיזוג'],
+      ['p', 'כלי בן סוג אחד שמסיים תנועה או תקיפה בחיים בשורה האחרונה יכול להתמזג עם סוג שבוחרים, חייל או פרש או קשת וגם הסוג שלו עצמו, או להישאר כמו שהוא. עד שבוחרים אי אפשר לעשות שום דבר אחר, גם לא לסיים את התור. בכלאיים שנוצרו שני סוגים: הכוח המרבי הוא סכום שני הכוחות, הכוח הנוכחי גדל בכוח הסוג שנוסף, התנועה היא הגדולה מבין השתיים, וכוח הירי והטווח הם סכום השניים. כלאיים לא מתמזגים שוב.'],
+      ['ul', [
+        'פרש וקשת: תנועה 4, כוח 3, ירי 2 בטווח 1.',
+        'פרש ופרש: תנועה 4, כוח 6.',
+        'חייל וחייל: תנועה 2, כוח 2.',
+        'קשת וקשת: תנועה 2, כוח 0, ירי 4 בטווח 2.',
+        'חייל וקשת: תנועה 2, כוח 1, ירי 2 בטווח 1.'
+      ]],
+
+      ['h', 'סוף המשחק'],
+      ['p', 'שחקן שלא נשאר לו אף כלי מפסיד. אם הכלים האחרונים של שני הצדדים נופלים באותה תקיפה, המשחק מסתיים בתיקו. שחקן שאין לו שום מהלך אפשרי מדלג על התור, ואם לשני השחקנים אין מהלך, התוצאה תיקו.']
+    ]
+  };
+
+  /* --------------------------------------------------------------- English */
+
+  var en = {
+    'app.title': 'War Game',
+
+    'menu.newGame': 'New game',
+    'menu.continue': 'Continue',
+    'menu.rules': 'Rules',
+    'menu.settings': 'Settings',
+
+    'game.endTurn': 'End turn',
+    'game.undo': 'Undo',
+    'game.menu': 'Menu',
+    'game.turn': 'Turn {n}',
+
+    'player.0': 'Player 1',
+    'player.1': 'Player 2',
+
+    'kind.S': 'Soldier',
+    'kind.K': 'Knight',
+    'kind.A': 'Archer',
+
+    'action.move': 'Move',
+    'action.attack': 'Attack',
+    'action.fire': 'Fire',
+    'action.heal': 'Heal',
+    'action.merge': 'Merge',
+
+    'stat.piece': 'Piece',
+    'stat.str': 'Strength',
+    'stat.move': 'Move',
+    'stat.fire': 'Fire',
+    'stat.range': 'Range',
+    'stat.none': '—',
+
+    'panel.used': 'Used',
+    'panel.available': 'Available',
+    'panel.nothing': 'none',
+
+    'msg.start': '{name} starts',
+    'msg.used': 'That piece has already acted this turn',
+    'msg.comboFull': 'No room for another {kind} this turn',
+    'msg.cannot': 'That piece cannot act now',
+    'msg.pass': '{name} has no legal action, the turn passes',
+    'msg.pending': 'Finish the merge first',
+
+    'merge.title': 'Merge',
+    'merge.text': 'The piece reached the far row. You may merge it with another kind.',
+    'merge.keep': 'Keep as is',
+
+    'over.win': 'Winner: {name}',
+    'over.draw': 'Draw',
+    'over.playAgain': 'Play again',
+
+    'rules.title': 'Rules',
+
+    'settings.title': 'Settings',
+    'settings.language': 'Language',
+    'settings.colors': 'Colors',
+    'settings.p0': 'Player 1 color',
+    'settings.p1': 'Player 2 color',
+    'settings.sqLight': 'Light square',
+    'settings.sqDark': 'Dark square',
+    'settings.randomBoard': 'Random colorful board',
+    'settings.reshuffle': 'Reshuffle',
+    'settings.presets': 'Presets',
+    'settings.display': 'Display',
+    'settings.animations': 'Animations',
+    'settings.coordinates': 'Coordinates',
+    'settings.gameRules': 'Game options',
+    'settings.diagonalFire': 'Diagonal fire',
+    'settings.knightsJump': 'Knights jump',
+    'settings.rulesNote': 'Applied at the next new game',
+    'settings.transfer': 'Transfer a game',
+    'settings.export': 'Export game',
+    'settings.import': 'Import game',
+    'settings.copy': 'Copy',
+    'settings.paste': 'Paste',
+    'settings.exportHint': 'The code of the current game. Copy it and open it on another device.',
+    'settings.importHint': 'Paste a game code here.',
+    'settings.copied': 'Code copied',
+    'settings.copyFail': 'Copying failed, select the code and copy it by hand',
+    'settings.imported': 'Game loaded',
+    'settings.importBad': 'That code is not valid',
+    'settings.noGame': 'No game to export',
+    'settings.pasteFail': 'The browser gave no access to the clipboard, paste into the field by hand',
+
+    'preset.wood': 'Wood',
+    'preset.marble': 'Marble',
+    'preset.forest': 'Forest',
+    'preset.ocean': 'Ocean',
+    'preset.rose': 'Rose',
+    'preset.night': 'Night',
+
+    'common.back': 'Back',
+
+    rules: [
+      ['h', 'The game'],
+      ['p', 'War Game is a game for two players on one device, on an 8 by 8 board. Each player has sixteen pieces, and you win when your opponent has none left.'],
+
+      ['h', 'Setup'],
+      ['p', 'Player 1 sets up on the three near rows and advances toward the far side; Player 2 sets up on the three far rows and advances toward the near side. Each army has eight soldiers on the back row, four knights in front of them and four archers in front of the knights. Who starts is drawn at random.'],
+
+      ['h', 'The pieces'],
+      ['pieceTable'],
+      ['p', 'Strength is the strength of a piece in an attack, and it changes during the game in steps of half a point. Every piece has a current strength and a maximum strength, and a piece whose strength drops to zero or below dies and leaves the board. An archer has no attack strength: it never attacks, and any attack on it kills it.'],
+
+      ['h', 'Moving'],
+      ['p', 'A piece moves in a straight line up, down, left or right, from one square up to its move number. Every square along the way must be empty, and a piece may not land on a piece of its own. With the Knights jump option on, a knight passes over pieces in its path. A hybrid that includes a knight jumps as well.'],
+
+      ['h', 'Attacking'],
+      ['p', 'Moving onto the square of an enemy piece is an attack, and it needs the path to be as clear as an ordinary move. Each side loses the strength of the other: the attacker loses the defender’s strength and the defender loses the attacker’s, so at most one of the two survives. If the defender dies and the attacker is still alive, the attacker takes the square; if the attacker dies, the defender stays where it is.'],
+      ['ul', [
+        'Soldier attacks soldier: both die.',
+        'Knight (3) attacks soldier (1): the soldier dies and the knight is left with 2.',
+        'Soldier (1) attacks knight (3): the soldier dies and the knight is left with 2.',
+        'Soldier (1) attacks a knight at 1: both die.',
+        'A knight at 2 attacks a knight at 3: the attacker dies and the defender is left with 1.',
+        'Any attack on an archer kills it and costs the attacker nothing.'
+      ]],
+
+      ['h', 'Firing'],
+      ['p', 'An archer fires at an enemy piece within its range. The target loses 2, the archer neither moves nor takes damage, and the shot passes over other pieces. Any piece with firing strength fires the same way, so a hybrid that includes an archer fires too. By default firing is allowed in any direction, diagonals included; with the Diagonal fire option off, the target must be on the same row or the same column. Range is measured as the larger of the row distance and the column distance, and along the row or the column when diagonal fire is off.'],
+
+      ['h', 'The turn'],
+      ['p', 'On a turn you activate pieces one at a time. An activated piece does exactly one thing, a move or an attack or a shot, and is then locked for the rest of the turn. You may not activate any set of pieces you like: the pieces that act in one turn have to fit one of these combinations.'],
+      ['combos'],
+      ['p', 'Fewer pieces are always allowed. So one turn holds at most one knight, and a knight leaves room for one other piece only. For a hybrid the kind that counts is knight if it has one, otherwise archer if it has one, otherwise soldier. The turn ends when you press End turn, and until then you can undo your actions one by one.'],
+
+      ['h', 'Healing'],
+      ['p', 'Any number of injured pieces may heal in a turn, and healing is outside the combinations. Healing adds half a point of strength and never goes above the maximum strength of the piece. A piece that heals does nothing else that turn, and a piece that has acted cannot heal.'],
+
+      ['h', 'Merging'],
+      ['p', 'A piece of a single kind that ends a move or an attack alive on the far row may merge with a kind of your choice, soldier or knight or archer and its own kind included, or stay as it is. Until that choice is made no other action is possible, End turn included. The hybrid that comes out has two kinds: its maximum strength is the two strengths added, its current strength grows by the strength of the added kind, its move is the better of the two, and its firing strength and range are the two added. A hybrid never merges again.'],
+      ['ul', [
+        'Knight and archer: move 4, strength 3, fires 2 at range 1.',
+        'Knight and knight: move 4, strength 6.',
+        'Soldier and soldier: move 2, strength 2.',
+        'Archer and archer: move 2, strength 0, fires 4 at range 2.',
+        'Soldier and archer: move 2, strength 1, fires 2 at range 1.'
+      ]],
+
+      ['h', 'End of the game'],
+      ['p', 'A player left with no pieces loses. If the last pieces of both players fall in the same attack, the game is a draw. A player with no legal action at all skips the turn, and if neither player has a legal action the result is a draw.']
+    ]
+  };
+
+  /* ------------------------------------------------------------------- API */
+
+  var I18N = {
+    langs: { he: he, en: en },
+    current: 'en',
+
+    set: function (lang) {
+      if (this.langs[lang]) this.current = lang;
+      return this.current;
+    },
+
+    dict: function () {
+      return this.langs[this.current] || this.langs.en;
+    },
+
+    dir: function () {
+      return this.current === 'he' ? 'rtl' : 'ltr';
+    },
+
+    t: function (key, vars) {
+      var s = this.dict()[key];
+      if (s === undefined) s = this.langs.en[key];
+      if (s === undefined) return key;
+      if (vars) {
+        s = s.replace(/\{(\w+)\}/g, function (m, name) {
+          return vars[name] !== undefined ? String(vars[name]) : m;
+        });
+      }
+      return s;
+    },
+
+    /* the blocks of the Rules screen in the current language */
+    rules: function () {
+      return this.dict().rules || this.langs.en.rules;
+    }
+  };
+
+  window.WarGame.I18N = I18N;
+})();
+</script>
+<script>
+/* icons.js - the SVG glyphs of the pieces.
+   window.WarGame.Icons = { glyph(kind, opts), piece(kinds, opts) }
+
+   Every shape is filled with currentColor and stroked with --piece-outline,
+   so a glyph takes the color of its owner from the element around it.
+   The three glyphs share one line: stroke-width 4, round joins and caps,
+   the same optical size inside the 100x100 box, and no hairline detail that
+   would close up at 40 px. */
+
+window.WarGame = window.WarGame || {};
+
+(function () {
+  'use strict';
+
+  /* ------------------------------------------------------------- the paths */
+
+  var BODY =
+    'fill:currentColor;stroke:var(--piece-outline,#1b1d24);stroke-width:4;' +
+    'stroke-linejoin:round;stroke-linecap:round';
+  var DETAIL = 'fill:var(--piece-outline,#1b1d24);stroke:none';
+
+  /* Soldier: a shield with two swords crossed behind it. The hilts rise to
+     the top corners and the points show below the rim, so the silhouette
+     stays a soldier's emblem and never a padlock. */
+  function sword(angle) {
+    return '<g transform="rotate(' + angle + ' 50 50)">' +
+      '<rect x="45.5" y="4" width="9" height="15" rx="4.5"/>' +
+      '<rect x="34" y="17" width="32" height="9" rx="4.5"/>' +
+      '<path d="M44.5,25 H55.5 V82 L50,94 L44.5,82 Z"/>' +
+      '</g>';
+  }
+
+  var SOLDIER =
+    sword(38) + sword(-38) +
+    '<path d="M21,36 H79 V58 C79,75 66,86 50,91 C34,86 21,75 21,58 Z"/>';
+
+  /* Knight: a horse head, as on a chess board, in profile. */
+  var KNIGHT =
+    '<path d="M27,91 C24,72 29,54 42,44 C50,38 55,29 56,20 ' +
+    'C56,14 62,12 65,17 C67,20 67,24 66,28 ' +
+    'C71,22 78,23 82,29 C87,37 89,46 89,52 C89,57 85,60 79,60 ' +
+    'L64,60 C58,62 55,66 55,74 L55,91 Z"/>';
+  var KNIGHT_EYE = '<circle cx="74" cy="41" r="3.2" style="' + DETAIL + '"/>';
+
+  /* Archer: a bow bent into an even arc, its string drawn back to the nock,
+     and a fletched arrow on it. */
+  var ARCHER =
+    '<path d="M16,82 C12,72 11,60 13,48 C16,32 30,22 50,22 ' +
+    'C70,22 84,32 87,48 C89,60 88,72 84,82 ' +
+    'L76,76 C79,67 80,58 78,50 C75,37 65,31 50,31 ' +
+    'C35,31 25,37 22,50 C20,58 21,67 24,76 Z"/>' +
+    '<path d="M19,78 L50,86 L81,78 L81.5,81 L50,89.5 L18.5,81 Z" ' +
+    'style="stroke-width:2.2"/>' +
+    '<path d="M46.5,68 L39,80 L39,71.5 L46.5,61 Z ' +
+    'M53.5,68 L61,80 L61,71.5 L53.5,61 Z" style="stroke-width:2.4"/>' +
+    '<rect x="46.5" y="13" width="7" height="75" rx="3.5"/>' +
+    '<path d="M50,2 L61.5,26 L50,21 L38.5,26 Z"/>';
+
+  var SHAPES = { S: SOLDIER, K: KNIGHT, A: ARCHER };
+  var DETAILS = { S: '', K: KNIGHT_EYE, A: '' };
+
+  /* A glyph that has a facing turns to face the enemy side of the board:
+     the knight mirrors left to right, the archer points its arrow the other
+     way. The soldier is symmetric and never turns. */
+  var FLIP = {
+    K: 'translate(100,0) scale(-1,1)',
+    A: 'translate(0,100) scale(1,-1)'
+  };
+
+  /* -------------------------------------------------------------- building */
+
+  function fmtStrength(v) {
+    var n = Number(v) || 0;
+    return n % 1 === 0 ? String(n) : n.toFixed(1);
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /* glyph(kind) -> an <svg> string for one kind, viewBox 0 0 100 100.
+     opts: { flip: true to face the other way, cls: extra class names } */
+  function glyph(kind, opts) {
+    opts = opts || {};
+    var shape = SHAPES[kind];
+    if (!shape) return '';
+    var tr = opts.flip && FLIP[kind] ? ' transform="' + FLIP[kind] + '"' : '';
+    var cls = 'glyph glyph--' + kind + (opts.cls ? ' ' + opts.cls : '');
+    return '<svg class="' + cls + '" viewBox="0 0 100 100" ' +
+      'xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true">' +
+      '<g' + tr + '><g style="' + BODY + '">' + shape + '</g>' + DETAILS[kind] + '</g>' +
+      '</svg>';
+  }
+
+  /* piece(kinds, opts) -> the whole piece: the main glyph, the second kind of
+     a hybrid small at the top corner, and the strength badge at the bottom.
+     opts: { owner: 0|1, str, maxStr, badge: false to drop the badge } */
+  function piece(kinds, opts) {
+    opts = opts || {};
+    var owner = opts.owner === 1 ? 1 : 0;
+    var list = kinds && kinds.length ? kinds : ['S'];
+    var flip = owner === 1;
+
+    var html = '<span class="piece" data-owner="' + owner + '">';
+    html += glyph(list[0], { flip: flip, cls: 'glyph--main' });
+    if (list.length > 1) {
+      html += '<span class="piece-sub">' +
+        glyph(list[1], { flip: flip, cls: 'glyph--sub' }) + '</span>';
+    }
+
+    var str = Number(opts.str);
+    var show = opts.badge !== false && isFinite(str) && str > 0;
+    if (show) {
+      var hurt = isFinite(opts.maxStr) && str < opts.maxStr;
+      html += '<span class="badge' + (hurt ? ' badge--hurt' : '') + '" dir="ltr">' +
+        esc(fmtStrength(str)) + '</span>';
+    }
+    html += '</span>';
+    return html;
+  }
+
+  window.WarGame.Icons = {
+    glyph: glyph,
+    piece: piece,
+    fmtStrength: fmtStrength
+  };
+})();
+</script>
+<script>
+/* War Game rules engine. Classic script, no modules, no DOM.
+   Every function returns new data and never mutates its arguments. */
+(function (global) {
+  'use strict';
+
+  var KINDS = {
+    S: { str: 1, move: 2, fire: 0, range: 0 },
+    K: { str: 3, move: 4, fire: 0, range: 0 },
+    A: { str: 0, move: 2, fire: 2, range: 1 }
+  };
+
+  var COMBOS = [['K', 'S'], ['K', 'A'], ['S', 'S', 'S'], ['A', 'S', 'S'], ['A', 'A', 'S']];
+
+  var DEFAULT_RULES = { diagonalFire: true, knightsJump: false };
+
+  var DIRS = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+  function clone(x) { return JSON.parse(JSON.stringify(x)); }
+
+  function illegal() { throw new Error('illegal action'); }
+
+  function onBoard(row, col) { return row >= 0 && row < 8 && col >= 0 && col < 8; }
+
+  // Player 0 advances toward row 7, player 1 toward row 0.
+  function farRow(owner) { return owner === 0 ? 7 : 0; }
+
+  /* ---------- pieces ---------- */
+
+  function comboKind(piece) {
+    if (piece.kinds.indexOf('K') >= 0) return 'K';
+    if (piece.kinds.indexOf('A') >= 0) return 'A';
+    return 'S';
+  }
+
+  function pieceStats(piece) {
+    var move = 0, fire = 0, range = 0;
+    piece.kinds.forEach(function (k) {
+      move = Math.max(move, KINDS[k].move); // a hybrid moves as the faster of its kinds
+      fire += KINDS[k].fire;                // fire strength and range add up
+      range += KINDS[k].range;
+    });
+    return {
+      str: piece.str, maxStr: piece.maxStr,
+      move: move, fire: fire, range: range,
+      comboKind: comboKind(piece)
+    };
+  }
+
+  function makePiece(owner, index, kind, row, col) {
+    return {
+      id: 'p' + owner + '-' + index,
+      owner: owner,
+      kinds: [kind],
+      str: KINDS[kind].str,
+      maxStr: KINDS[kind].str,
+      row: row, col: col
+    };
+  }
+
+  function pieceAt(state, row, col) {
+    var ids = Object.keys(state.pieces);
+    for (var i = 0; i < ids.length; i++) {
+      var p = state.pieces[ids[i]];
+      if (p.row === row && p.col === col) return p;
+    }
+    return null;
+  }
+
+  function piecesOf(state, player) {
+    return Object.keys(state.pieces)
+      .map(function (id) { return state.pieces[id]; })
+      .filter(function (p) { return p.owner === player; });
+  }
+
+  /* ---------- setup ---------- */
+
+  function newGame(rules, firstPlayer) {
+    var r = { diagonalFire: DEFAULT_RULES.diagonalFire, knightsJump: DEFAULT_RULES.knightsJump };
+    if (rules) {
+      if ('diagonalFire' in rules) r.diagonalFire = !!rules.diagonalFire;
+      if ('knightsJump' in rules) r.knightsJump = !!rules.knightsJump;
+    }
+    var first = (firstPlayer === 0 || firstPlayer === 1) ? firstPlayer : (Math.random() < 0.5 ? 0 : 1);
+
+    var pieces = {};
+    [0, 1].forEach(function (owner) {
+      var back = owner === 0 ? 0 : 7;
+      var step = owner === 0 ? 1 : -1; // toward the middle of the board
+      var n = 0, c;
+      for (c = 0; c < 8; c++) { var s = makePiece(owner, n++, 'S', back, c); pieces[s.id] = s; }
+      for (c = 2; c <= 5; c++) { var k = makePiece(owner, n++, 'K', back + step, c); pieces[k.id] = k; }
+      for (c = 2; c <= 5; c++) { var a = makePiece(owner, n++, 'A', back + 2 * step, c); pieces[a.id] = a; }
+    });
+
+    return {
+      rules: r,
+      pieces: pieces,
+      turn: { player: first, number: 1, used: [] },
+      pendingMerge: null,
+      winner: null,
+      firstPlayer: first
+    };
+  }
+
+  /* ---------- combinations ---------- */
+
+  function kindCounts(kinds) {
+    var c = { K: 0, A: 0, S: 0 };
+    kinds.forEach(function (k) { c[k] += 1; });
+    return c;
+  }
+
+  // True when the multiset of kinds fits inside at least one allowed combination.
+  function fitsSomeCombo(kinds) {
+    var c = kindCounts(kinds);
+    return COMBOS.some(function (combo) {
+      var cc = kindCounts(combo);
+      return c.K <= cc.K && c.A <= cc.A && c.S <= cc.S;
+    });
+  }
+
+  function usedKinds(state) {
+    return state.turn.used
+      .filter(function (u) { return u.kind !== null && u.kind !== undefined; }) // heals carry no kind
+      .map(function (u) { return u.kind; });
+  }
+
+  function activatableKinds(state) {
+    var used = usedKinds(state);
+    var out = new Set();
+    ['K', 'A', 'S'].forEach(function (k) {
+      if (fitsSomeCombo(used.concat([k]))) out.add(k);
+    });
+    return out;
+  }
+
+  function isUsed(state, id) {
+    return state.turn.used.some(function (u) { return u.id === id; });
+  }
+
+  function isFree(state, id) {
+    var p = state.pieces[id];
+    return !!p &&
+      state.winner === null &&
+      state.pendingMerge === null &&
+      p.owner === state.turn.player &&
+      !isUsed(state, id);
+  }
+
+  function canActivate(state, id) {
+    if (!isFree(state, id)) return false;
+    return activatableKinds(state).has(comboKind(state.pieces[id]));
+  }
+
+  function canHeal(state, id) {
+    if (!isFree(state, id)) return false;
+    var p = state.pieces[id];
+    return p.str < p.maxStr;
+  }
+
+  /* ---------- legal actions ---------- */
+
+  // Only a piece whose kinds include K passes over occupied squares, and only with the toggle on.
+  function canJump(state, piece) {
+    return !!state.rules.knightsJump && piece.kinds.indexOf('K') >= 0;
+  }
+
+  function inFireRange(state, shooter, target, range) {
+    var dr = Math.abs(target.row - shooter.row);
+    var dc = Math.abs(target.col - shooter.col);
+    if (state.rules.diagonalFire) return Math.max(dr, dc) <= range; // any direction
+    if (dr !== 0 && dc !== 0) return false;                         // same row or column only
+    return dr + dc <= range;
+  }
+
+  function legalActions(state, id) {
+    var p = state.pieces[id];
+    if (!p) return [];
+    var out = [];
+
+    if (canActivate(state, id)) {
+      var st = pieceStats(p);
+      DIRS.forEach(function (d) {
+        for (var n = 1; n <= st.move; n++) {
+          var row = p.row + d[0] * n, col = p.col + d[1] * n;
+          if (!onBoard(row, col)) break;
+          var occ = pieceAt(state, row, col);
+          if (!occ) out.push({ type: 'move', to: { row: row, col: col } });
+          // melee needs strength above 0, so an archer never attacks
+          else if (occ.owner !== p.owner && st.str > 0) out.push({ type: 'attack', target: occ.id });
+          if (occ && !canJump(state, p)) break; // no jumping over an occupied square
+        }
+      });
+      if (st.fire > 0) {
+        piecesOf(state, 1 - p.owner).forEach(function (t) {
+          if (inFireRange(state, p, t, st.range)) out.push({ type: 'fire', target: t.id });
+        });
+      }
+    }
+
+    if (canHeal(state, id)) out.push({ type: 'heal' });
+    return out;
+  }
+
+  function hasAnyAction(state) {
+    return piecesOf(state, state.turn.player).some(function (p) {
+      return legalActions(state, p.id).length > 0;
+    });
+  }
+
+  /* ---------- applying actions ---------- */
+
+  function checkGameOver(s, events) {
+    var n0 = piecesOf(s, 0).length, n1 = piecesOf(s, 1).length;
+    if (n0 > 0 && n1 > 0) return false;
+    s.winner = (n0 === 0 && n1 === 0) ? 'draw' : (n0 === 0 ? 1 : 0);
+    events.push({ type: 'gameOver', winner: s.winner });
+    return true;
+  }
+
+  // Called after every action. `mover` is the piece that ended a move or an attack alive, if any.
+  function finishAction(s, events, mover) {
+    if (checkGameOver(s, events)) return;
+    if (mover && s.pieces[mover.id] && mover.kinds.length === 1 && mover.row === farRow(mover.owner)) {
+      s.pendingMerge = mover.id;
+      events.push({ type: 'mergePending', id: mover.id });
+    }
+  }
+
+  function applyMove(s, action, events) {
+    var p = s.pieces[action.piece];
+    if (!p || !action.to) illegal();
+    var ok = legalActions(s, p.id).some(function (a) {
+      return a.type === 'move' && a.to.row === action.to.row && a.to.col === action.to.col;
+    });
+    if (!ok) illegal();
+
+    var from = { row: p.row, col: p.col };
+    p.row = action.to.row;
+    p.col = action.to.col;
+    events.push({ type: 'move', id: p.id, from: from, to: { row: p.row, col: p.col } });
+    s.turn.used.push({ id: p.id, kind: comboKind(p) });
+    finishAction(s, events, p);
+  }
+
+  function applyAttack(s, action, events) {
+    var p = s.pieces[action.piece], t = s.pieces[action.target];
+    if (!p || !t) illegal();
+    var ok = legalActions(s, p.id).some(function (a) {
+      return a.type === 'attack' && a.target === t.id;
+    });
+    if (!ok) illegal();
+
+    var a = pieceStats(p).str, d = pieceStats(t).str;
+    var from = { row: p.row, col: p.col }, to = { row: t.row, col: t.col };
+    // each side loses the other's strength; at most one of the two can survive
+    p.str -= d;
+    t.str -= a;
+    var attackerDies = p.str <= 0, defenderDies = t.str <= 0;
+
+    events.push({
+      type: 'attack', attacker: p.id, defender: t.id,
+      from: from, to: to, attackerLoss: d, defenderLoss: a
+    });
+    if (defenderDies) {
+      events.push({ type: 'die', id: t.id, owner: t.owner, at: to });
+      delete s.pieces[t.id];
+    }
+    if (attackerDies) {
+      events.push({ type: 'die', id: p.id, owner: p.owner, at: from });
+      delete s.pieces[p.id];
+    }
+    // the attacker takes the square only when it survives and the defender died
+    if (!attackerDies && defenderDies) { p.row = to.row; p.col = to.col; }
+
+    s.turn.used.push({ id: p.id, kind: comboKind(p) });
+    finishAction(s, events, attackerDies ? null : p);
+  }
+
+  function applyFire(s, action, events) {
+    var p = s.pieces[action.piece], t = s.pieces[action.target];
+    if (!p || !t) illegal();
+    var ok = legalActions(s, p.id).some(function (a) {
+      return a.type === 'fire' && a.target === t.id;
+    });
+    if (!ok) illegal();
+
+    var damage = pieceStats(p).fire;
+    t.str -= damage; // the shooter loses nothing and does not move
+    events.push({ type: 'fire', shooter: p.id, target: t.id, damage: damage });
+    if (t.str <= 0) {
+      events.push({ type: 'die', id: t.id, owner: t.owner, at: { row: t.row, col: t.col } });
+      delete s.pieces[t.id];
+    }
+    s.turn.used.push({ id: p.id, kind: comboKind(p) });
+    finishAction(s, events, null);
+  }
+
+  function applyHeal(s, action, events) {
+    var p = s.pieces[action.piece];
+    if (!p || !canHeal(s, p.id)) illegal();
+    var amount = Math.min(0.5, p.maxStr - p.str);
+    p.str += amount;
+    events.push({ type: 'heal', id: p.id, amount: amount, str: p.str });
+    s.turn.used.push({ id: p.id, kind: null }); // a heal fills no combination slot
+    finishAction(s, events, null);
+  }
+
+  function applyMerge(s, action, events) {
+    var p = s.pieces[action.piece];
+    if (!p || s.pendingMerge !== action.piece) illegal();
+    if (!KINDS[action.kind]) illegal();
+    var own = p.kinds[0], added = action.kind;
+    p.kinds = [own, added];
+    p.maxStr = KINDS[own].str + KINDS[added].str;
+    p.str += KINDS[added].str;
+    s.pendingMerge = null;
+    events.push({ type: 'merge', id: p.id, kinds: p.kinds.slice() });
+  }
+
+  function applySkipMerge(s, action, events) {
+    if (!s.pieces[action.piece] || s.pendingMerge !== action.piece) illegal();
+    s.pendingMerge = null;
+  }
+
+  function startTurn(s, events) {
+    s.turn.player = 1 - s.turn.player;
+    s.turn.number += 1;
+    s.turn.used = [];
+    events.push({ type: 'turnStart', player: s.turn.player, number: s.turn.number });
+  }
+
+  function applyEndTurn(s, events) {
+    if (s.winner !== null || s.pendingMerge !== null) illegal();
+    events.push({ type: 'turnEnd', player: s.turn.player });
+    for (var i = 0; i < 2; i++) {
+      startTurn(s, events);
+      if (hasAnyAction(s)) return;
+      events.push({ type: 'pass', player: s.turn.player }); // no legal action: skip this player
+    }
+    s.winner = 'draw'; // neither player can act
+    events.push({ type: 'gameOver', winner: 'draw' });
+  }
+
+  function apply(state, action) {
+    var s = clone(state);
+    var events = [];
+    var type = action && action.type;
+    if (type === 'move') applyMove(s, action, events);
+    else if (type === 'attack') applyAttack(s, action, events);
+    else if (type === 'fire') applyFire(s, action, events);
+    else if (type === 'heal') applyHeal(s, action, events);
+    else if (type === 'merge') applyMerge(s, action, events);
+    else if (type === 'skipMerge') applySkipMerge(s, action, events);
+    else if (type === 'endTurn') applyEndTurn(s, events);
+    else illegal();
+    return { state: s, events: events };
+  }
+
+  /* ---------- serialization ---------- */
+
+  function toBase64Url(text) {
+    return global.btoa(text).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+
+  function fromBase64Url(text) {
+    var b = text.replace(/-/g, '+').replace(/_/g, '/');
+    while (b.length % 4 !== 0) b += '=';
+    return global.atob(b);
+  }
+
+  function serialize(state) {
+    return 'WG1.' + toBase64Url(JSON.stringify(state));
+  }
+
+  function deserialize(text) {
+    if (typeof text !== 'string' || text.slice(0, 4) !== 'WG1.') throw new Error('bad game code');
+    var state;
+    try {
+      state = JSON.parse(fromBase64Url(text.slice(4)));
+    } catch (e) {
+      throw new Error('bad game code');
+    }
+    if (!state || typeof state !== 'object' || !state.pieces || !state.turn || !state.rules) {
+      throw new Error('bad game code');
+    }
+    return state;
+  }
+
+  global.WarGame = global.WarGame || {};
+  global.WarGame.Engine = {
+    KINDS: KINDS,
+    COMBOS: COMBOS,
+    newGame: newGame,
+    pieceStats: pieceStats,
+    comboKind: comboKind,
+    pieceAt: pieceAt,
+    piecesOf: piecesOf,
+    usedKinds: usedKinds,
+    activatableKinds: activatableKinds,
+    canActivate: canActivate,
+    canHeal: canHeal,
+    legalActions: legalActions,
+    hasAnyAction: hasAnyAction,
+    apply: apply,
+    serialize: serialize,
+    deserialize: deserialize
+  };
+})(window);
+</script>
+<script>
+/* =====================================================================
+   ui.js - screens, board, input, animation, settings, persistence.
+   window.WarGame.UI
+   ===================================================================== */
+
+window.WarGame = window.WarGame || {};
+
+(function () {
+  'use strict';
+
+  var I18N = window.WarGame.I18N;
+  var Icons = window.WarGame.Icons;
+  var Engine = window.WarGame.Engine;
+
+  /* ------------------------------------------------------- constants --- */
+
+  var SETTINGS_KEY = 'wargame.settings';
+  var GAME_KEY = 'wargame.game';
+  var KIND_ORDER = ['K', 'A', 'S'];
+
+  var DEFAULT_SETTINGS = {
+    lang: null,
+    p0: '#efe6cf',
+    p1: '#2f3550',
+    sqLight: '#efe0c3',
+    sqDark: '#a97e57',
+    randomBoard: false,
+    boardColors: null,
+    animations: true,
+    coordinates: false,
+    diagonalFire: true,
+    knightsJump: false
+  };
+
+  var PRESETS = [
+    { id: 'wood', p0: '#efe6cf', p1: '#2f3550', sqLight: '#efe0c3', sqDark: '#a97e57' },
+    { id: 'marble', p0: '#fdfcf8', p1: '#363b46', sqLight: '#ebe9e3', sqDark: '#98a0a9' },
+    { id: 'forest', p0: '#f4f1da', p1: '#21402c', sqLight: '#dfe7cc', sqDark: '#6d8f5d' },
+    { id: 'ocean', p0: '#eaf5fa', p1: '#0f3450', sqLight: '#d6e9f1', sqDark: '#5a8fa9' },
+    { id: 'rose', p0: '#fff2f0', p1: '#5c1f33', sqLight: '#f5dfe0', sqDark: '#c08497' },
+    { id: 'night', p0: '#e9e5f2', p1: '#15161c', sqLight: '#4b5065', sqDark: '#2b2f3d' }
+  ];
+
+  /* ------------------------------------------------------- app state --- */
+
+  var G = {
+    settings: null,
+    state: null,
+    history: [],      /* states before each action of the current turn */
+    sel: null,        /* id of the selected piece */
+    acts: [],         /* its legal actions */
+    busy: false       /* animating: input is blocked */
+  };
+
+  var el = {};          /* cached nodes */
+  var pieceEls = {};    /* piece id -> its .pc element */
+  var reduceMotion = null;
+
+  /* ---------------------------------------------------- small helpers --- */
+
+  function $(id) { return document.getElementById(id); }
+
+  function t(key, vars) { return I18N.t(key, vars); }
+
+  function make(tag, cls, html) {
+    var n = document.createElement(tag);
+    if (cls) n.className = cls;
+    if (html != null) n.innerHTML = html;
+    return n;
+  }
+
+  function clearNode(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+
+  function fmt(v) { return Icons.fmtStrength(v); }
+
+  function hexToRgb(hex) {
+    var h = String(hex || '').replace('#', '');
+    if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+    var n = parseInt(h, 16);
+    if (!isFinite(n)) return { r: 128, g: 128, b: 128 };
+    return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 };
+  }
+
+  function luminance(hex) {
+    var c = hexToRgb(hex);
+    function ch(v) {
+      v = v / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    }
+    return 0.2126 * ch(c.r) + 0.7152 * ch(c.g) + 0.0722 * ch(c.b);
+  }
+
+  /* a dark outline on a light piece, a light outline on a dark one */
+  function outlineFor(hex) {
+    return luminance(hex) > 0.42 ? '#191c24' : '#f6f4ef';
+  }
+
+  function playerColor(p) { return p === 1 ? G.settings.p1 : G.settings.p0; }
+
+  /* activatableKinds gives a Set; an array reads the same way here */
+  function inKinds(set, kind) {
+    if (!set) return false;
+    if (typeof set.has === 'function') return set.has(kind);
+    return Array.prototype.indexOf.call(set, kind) >= 0;
+  }
+
+  function animOn() {
+    return !!(G.settings && G.settings.animations) &&
+      !(reduceMotion && reduceMotion.matches);
+  }
+
+  function wait(ms) {
+    var d = animOn() ? ms : 0;
+    return new Promise(function (r) { setTimeout(r, d); });
+  }
+
+  /* ------------------------------------------------------- the settings - */
+
+  function loadSettings() {
+    var s = {}, k;
+    for (k in DEFAULT_SETTINGS) s[k] = DEFAULT_SETTINGS[k];
+    try {
+      var raw = localStorage.getItem(SETTINGS_KEY);
+      if (raw) {
+        var got = JSON.parse(raw);
+        for (k in DEFAULT_SETTINGS) {
+          if (got && got[k] !== undefined && got[k] !== null) s[k] = got[k];
+        }
+      }
+    } catch (e) { /* no storage: the defaults stand */ }
+    if (!s.lang) {
+      s.lang = (navigator.language || 'en').toLowerCase().indexOf('he') === 0 ? 'he' : 'en';
+    }
+    return s;
+  }
+
+  function saveSettings() {
+    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(G.settings)); }
+    catch (e) { /* private mode: the settings live for this session only */ }
+  }
+
+  /* one soft random color per square, the checker pattern kept by lightness */
+  function makeBoardColors() {
+    var out = [];
+    for (var r = 0; r < 8; r++) {
+      for (var c = 0; c < 8; c++) {
+        var dark = (r + c) % 2 === 0;
+        var h = Math.floor(Math.random() * 360);
+        out.push('hsl(' + h + ', 45%, ' + (dark ? 58 : 72) + '%)');
+      }
+    }
+    return out;
+  }
+
+  function applySettings() {
+    var root = document.documentElement;
+    root.style.setProperty('--p0', G.settings.p0);
+    root.style.setProperty('--p1', G.settings.p1);
+    root.style.setProperty('--p0-outline', outlineFor(G.settings.p0));
+    root.style.setProperty('--p1-outline', outlineFor(G.settings.p1));
+    root.style.setProperty('--sq-light', G.settings.sqLight);
+    root.style.setProperty('--sq-dark', G.settings.sqDark);
+
+    document.body.classList.toggle('no-anim', !G.settings.animations);
+    el.board.classList.toggle('board--coords', !!G.settings.coordinates);
+    paintSquares();
+  }
+
+  function paintSquares() {
+    var use = G.settings.randomBoard && G.settings.boardColors &&
+      G.settings.boardColors.length === 64;
+    for (var i = 0; i < el.sqs.length; i++) {
+      var sq = el.sqs[i];
+      var r = +sq.dataset.row, c = +sq.dataset.col;
+      sq.style.backgroundColor = use ? G.settings.boardColors[r * 8 + c] : '';
+    }
+  }
+
+  /* -------------------------------------------------------- language ---- */
+
+  function setLang(lang) {
+    I18N.set(lang);
+    G.settings.lang = I18N.current;
+    saveSettings();
+    refreshTexts();
+  }
+
+  function refreshTexts() {
+    var root = document.documentElement;
+    root.setAttribute('lang', I18N.current);
+    root.setAttribute('dir', I18N.dir());
+    document.title = t('app.title');
+
+    var nodes = document.querySelectorAll('[data-i18n]');
+    for (var i = 0; i < nodes.length; i++) {
+      nodes[i].textContent = t(nodes[i].getAttribute('data-i18n'));
+    }
+
+    var btns = document.querySelectorAll('.lang-btn');
+    for (var j = 0; j < btns.length; j++) {
+      btns[j].classList.toggle('is-on', btns[j].dataset.lang === I18N.current);
+    }
+
+    renderPresets();
+    renderRules();
+    renderMenu();
+    /* the two live lines hold a sentence written in the old language */
+    msg('');
+    transferMsg('');
+    if (G.state) { renderPanel(); renderPieces(); renderMarks(); }
+    if (!el.overMerge.hidden) renderMergeDialog();
+    if (!el.overOver.hidden) renderOver();
+  }
+
+  /* --------------------------------------------------------- screens ---- */
+
+  function show(name) {
+    var screens = ['menu', 'game', 'rules', 'settings'];
+    for (var i = 0; i < screens.length; i++) {
+      $('screen-' + screens[i]).classList.toggle('is-active', screens[i] === name);
+    }
+    if (name === 'menu') renderMenu();
+    if (name === 'settings') fillSettingsForm();
+    measure();
+    requestAnimationFrame(measure);
+  }
+
+  function renderMenu() {
+    el.btnContinue.hidden = !hasSavedGame();
+  }
+
+  /* ------------------------------------------------------- the layout --- */
+
+  function measure() {
+    var root = document.documentElement;
+    root.style.setProperty('--vh', window.innerHeight + 'px');
+    root.style.setProperty('--vw', window.innerWidth + 'px');
+    var w = el.board.clientWidth;
+    if (w > 0) root.style.setProperty('--sq', (w / 8) + 'px');
+  }
+
+  /* ------------------------------------------------------- the squares -- */
+
+  var FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+
+  function buildSquares() {
+    clearNode(el.squares);
+    el.sqs = [];
+    /* row 7 is drawn at the top, row 0 at the bottom; column 0 at the left */
+    for (var r = 7; r >= 0; r--) {
+      for (var c = 0; c < 8; c++) {
+        var dark = (r + c) % 2 === 0;
+        var sq = make('div', 'sq ' + (dark ? 'sq--dark' : 'sq--light'));
+        sq.dataset.row = r;
+        sq.dataset.col = c;
+        if (r === 0) sq.appendChild(make('span', 'coord coord--file', FILES[c]));
+        if (c === 0) sq.appendChild(make('span', 'coord coord--rank', String(r + 1)));
+        el.squares.appendChild(sq);
+        el.sqs.push(sq);
+      }
+    }
+  }
+
+  function sqNode(row, col) {
+    return el.sqs[(7 - row) * 8 + col];
+  }
+
+  /* percent transform of a board square, the board being 8 squares wide */
+  function tf(row, col) {
+    return 'translate(' + (col * 100) + '%, ' + ((7 - row) * 100) + '%)';
+  }
+
+  function centerPx(row, col) {
+    var s = el.board.clientWidth / 8;
+    return { x: (col + 0.5) * s, y: (7 - row + 0.5) * s, s: s };
+  }
+
+  /* -------------------------------------------------------- the pieces -- */
+
+  function renderPieces() {
+    var st = G.state, id, p;
+    if (!st) return;
+    var seen = {};
+    for (id in st.pieces) {
+      p = st.pieces[id];
+      seen[id] = true;
+      var node = pieceEls[id];
+      if (!node) {
+        node = make('div', 'pc');
+        node.dataset.id = id;
+        pieceEls[id] = node;
+        el.pieces.appendChild(node);
+      }
+      node.style.opacity = '';
+      node.style.transform = tf(p.row, p.col);
+      node.classList.toggle('pc--used', isUsed(st, id));
+      node.innerHTML = Icons.piece(p.kinds, {
+        owner: p.owner, str: p.str, maxStr: p.maxStr
+      });
+    }
+    for (id in pieceEls) {
+      if (!seen[id]) {
+        if (pieceEls[id].parentNode) pieceEls[id].parentNode.removeChild(pieceEls[id]);
+        delete pieceEls[id];
+      }
+    }
+  }
+
+  function isUsed(st, id) {
+    var u = st.turn.used;
+    for (var i = 0; i < u.length; i++) if (u[i].id === id) return true;
+    return false;
+  }
+
+  /* ---------------------------------------------------------- the panel - */
+
+  function chip(kind, dim) {
+    return '<span class="chip' + (dim ? ' chip--dim' : '') + '">' +
+      '<span class="chip-ico">' + Icons.glyph(kind) + '</span>' +
+      '<span>' + t('kind.' + kind) + '</span></span>';
+  }
+
+  function renderPanel() {
+    var st = G.state;
+    if (!st) return;
+    var pl = st.turn.player;
+
+    el.turnSwatch.style.background = playerColor(pl);
+    el.turnName.textContent = t('player.' + pl);
+    el.turnNumber.textContent = t('game.turn', { n: st.turn.number });
+    document.documentElement.style.setProperty('--p-cur', playerColor(pl));
+    document.documentElement.style.setProperty('--p-cur-outline', outlineFor(playerColor(pl)));
+
+    var used = Engine.usedKinds(st) || [];
+    el.comboUsed.innerHTML = used.length
+      ? used.map(function (k) { return chip(k); }).join('')
+      : '<span class="chip chip--dim">' + t('panel.nothing') + '</span>';
+
+    var avail = [];
+    if (st.winner === null && !st.pendingMerge) {
+      var set = Engine.activatableKinds(st);
+      avail = KIND_ORDER.filter(function (k) { return inKinds(set, k); });
+    }
+    el.comboAvail.innerHTML = avail.length
+      ? avail.map(function (k) { return chip(k); }).join('')
+      : '<span class="chip chip--dim">' + t('panel.nothing') + '</span>';
+
+    var canHeal = !!(G.sel && hasAct('heal'));
+    el.btnHeal.hidden = !canHeal;
+    el.btnUndo.disabled = G.history.length === 0 || G.busy;
+    el.btnEndTurn.disabled = st.winner !== null || !!st.pendingMerge || G.busy;
+  }
+
+  function msg(text) { el.panelMsg.textContent = text || ''; }
+
+  /* --------------------------------------------- selection and marks ---- */
+
+  function hasAct(type) {
+    for (var i = 0; i < G.acts.length; i++) if (G.acts[i].type === type) return true;
+    return false;
+  }
+
+  function select(id) {
+    G.sel = id;
+    G.acts = Engine.legalActions(G.state, id) || [];
+    msg('');
+    renderMarks();
+    renderPanel();
+  }
+
+  function deselect() {
+    G.sel = null;
+    G.acts = [];
+    renderMarks();
+    renderPanel();
+  }
+
+  function markNode(row, col, cls, inner) {
+    var n = make('div', 'mark ' + cls, inner || '');
+    n.style.transform = tf(row, col);
+    el.marks.appendChild(n);
+    return n;
+  }
+
+  function clearMarks() {
+    clearNode(el.marks);
+    for (var i = 0; i < el.sqs.length; i++) {
+      el.sqs[i].classList.remove('sq--sel', 'sq--act');
+    }
+  }
+
+  function bindFire(node, target) {
+    node.addEventListener('click', function (e) {
+      e.stopPropagation();
+      doAction({ type: 'fire', piece: G.sel, target: target });
+    });
+  }
+
+  function renderMarks() {
+    clearMarks();
+    var st = G.state;
+    if (!st) return;
+
+    /* a faint ring on the pieces that may still be activated */
+    if (st.winner === null && !st.pendingMerge && !G.busy) {
+      var mine = Engine.piecesOf(st, st.turn.player) || [];
+      for (var m = 0; m < mine.length; m++) {
+        if (Engine.canActivate(st, mine[m].id) || Engine.canHeal(st, mine[m].id)) {
+          sqNode(mine[m].row, mine[m].col).classList.add('sq--act');
+        }
+      }
+    }
+
+    if (!G.sel) return;
+    var me = st.pieces[G.sel];
+    if (me) sqNode(me.row, me.col).classList.add('sq--sel');
+
+    for (var a = 0; a < G.acts.length; a++) {
+      var act = G.acts[a];
+      if (act.type === 'move') {
+        markNode(act.to.row, act.to.col, 'mark--move');
+      } else if (act.type === 'attack') {
+        var d = st.pieces[act.target];
+        if (d) markNode(d.row, d.col, 'mark--attack');
+      } else if (act.type === 'fire') {
+        var f = st.pieces[act.target];
+        if (f) {
+          var fm = markNode(f.row, f.col, 'mark--fire',
+            '<span class="bowmark">' + Icons.glyph('A') + '</span>');
+          /* the bow takes the tap of its own, so a square that is both an
+             attack and a fire target still offers the two */
+          bindFire(fm.firstChild, act.target);
+        }
+      } else if (act.type === 'heal' && me) {
+        var b = make('button', 'heal-btn', '<span>' + t('action.heal') + '</span>');
+        b.type = 'button';
+        b.style.transform = tf(me.row, me.col);
+        b.addEventListener('click', function (e) {
+          e.stopPropagation();
+          doAction({ type: 'heal', piece: G.sel });
+        });
+        el.marks.appendChild(b);
+      }
+    }
+  }
+
+  /* the action whose target square is this one, if the selection has one */
+  function actionAt(row, col) {
+    var st = G.state;
+    for (var i = 0; i < G.acts.length; i++) {
+      var a = G.acts[i];
+      if (a.type === 'move' && a.to.row === row && a.to.col === col) {
+        return { type: 'move', piece: G.sel, to: { row: row, col: col } };
+      }
+      if (a.type === 'attack' || a.type === 'fire') {
+        var p = st.pieces[a.target];
+        if (p && p.row === row && p.col === col) {
+          return { type: a.type, piece: G.sel, target: a.target };
+        }
+      }
+    }
+    return null;
+  }
+
+  function whyNot(p) {
+    var st = G.state;
+    if (isUsed(st, p.id)) return t('msg.used');
+    var set = Engine.activatableKinds(st);
+    var kind = Engine.comboKind(p);
+    if (!inKinds(set, kind)) return t('msg.comboFull', { kind: t('kind.' + kind) });
+    return t('msg.cannot');
+  }
+
+  /* ----------------------------------------------------------- input ---- */
+
+  function onBoardPointer(e) {
+    if (e.button !== undefined && e.button !== 0) return;
+    var sq = e.target && e.target.closest ? e.target.closest('.sq') : null;
+    if (!sq) return;
+    e.preventDefault();
+    onSquare(+sq.dataset.row, +sq.dataset.col);
+  }
+
+  function onSquare(row, col) {
+    var st = G.state;
+    if (!st || G.busy || st.winner !== null) return;
+    if (st.pendingMerge) { msg(t('msg.pending')); return; }
+
+    if (G.sel) {
+      var act = actionAt(row, col);
+      if (act) { doAction(act); return; }
+    }
+
+    var p = Engine.pieceAt(st, row, col);
+    if (!p || p.owner !== st.turn.player) { deselect(); msg(''); return; }
+    if (p.id === G.sel) { deselect(); return; }
+
+    var acts = Engine.legalActions(st, p.id) || [];
+    if (acts.length) { select(p.id); }
+    else { deselect(); msg(whyNot(p)); }
+  }
+
+  /* --------------------------------------------------------- actions ---- */
+
+  function doAction(action) {
+    var st = G.state;
+    if (!st || G.busy) return;
+    var prev = st, res;
+    try {
+      res = Engine.apply(st, action);
+    } catch (err) {
+      msg(t('msg.cannot'));
+      return;
+    }
+
+    if (action.type === 'endTurn') G.history = [];
+    else G.history.push(prev);
+
+    G.state = res.state;
+    G.sel = null;
+    G.acts = [];
+    clearMarks();
+    G.busy = true;
+    renderPanel();
+
+    playEvents(res.events || [], prev, res.state).then(function () {
+      G.busy = false;
+      render();
+      autosave();
+      afterAction(res.events || []);
+    });
+  }
+
+  function afterAction(events) {
+    var st = G.state;
+    for (var i = 0; i < events.length; i++) {
+      if (events[i].type === 'pass') {
+        msg(t('msg.pass', { name: t('player.' + events[i].player) }));
+      }
+    }
+    if (st.winner !== null) { openOver(); return; }
+    if (st.pendingMerge) openMerge();
+  }
+
+  function endTurn() {
+    if (G.busy || !G.state) return;
+    if (G.state.pendingMerge) { msg(t('msg.pending')); return; }
+    doAction({ type: 'endTurn' });
+  }
+
+  function undo() {
+    if (G.busy || !G.history.length) return;
+    G.state = G.history.pop();
+    G.sel = null;
+    G.acts = [];
+    msg('');
+    render();
+    autosave();
+    if (G.state.pendingMerge) openMerge(); else closeMerge();
+  }
+
+  function render() {
+    renderPieces();
+    renderMarks();
+    renderPanel();
+    measure();
+  }
+
+  /* ------------------------------------------------------ animations ---- */
+
+  function fxAdd(node, life) {
+    el.fx.appendChild(node);
+    setTimeout(function () {
+      if (node.parentNode) node.parentNode.removeChild(node);
+    }, life);
+    return node;
+  }
+
+  function floatText(row, col, text, cls) {
+    if (!animOn()) return;
+    var c = centerPx(row, col);
+    var n = make('div', 'float ' + (cls || ''), text);
+    n.style.left = c.x + 'px';
+    n.style.top = (c.y - c.s * 0.15) + 'px';
+    fxAdd(n, 820);
+  }
+
+  function floatLoss(row, col, loss) {
+    if (!(loss > 0)) return;
+    floatText(row, col, '−' + fmt(loss), 'float--loss');
+  }
+
+  function flashSquare(row, col) {
+    if (!animOn()) return;
+    var n = make('div', 'hitflash');
+    n.style.transform = tf(row, col);
+    fxAdd(n, 340);
+  }
+
+  function setPos(id, row, col) {
+    var node = pieceEls[id];
+    if (node) node.style.transform = tf(row, col);
+  }
+
+  async function animMove(ev) {
+    setPos(ev.id, ev.to.row, ev.to.col);
+    await wait(280);
+  }
+
+  async function animAttack(ev, after) {
+    var node = pieceEls[ev.attacker];
+    if (node) {
+      var r = ev.from.row + (ev.to.row - ev.from.row) * 0.55;
+      var c = ev.from.col + (ev.to.col - ev.from.col) * 0.55;
+      node.style.transform = 'translate(' + (c * 100) + '%, ' + ((7 - r) * 100) + '%)';
+    }
+    await wait(170);
+    floatLoss(ev.to.row, ev.to.col, ev.defenderLoss);
+    floatLoss(ev.from.row, ev.from.col, ev.attackerLoss);
+    await wait(170);
+    var alive = after.pieces[ev.attacker];
+    if (node) {
+      if (alive) node.style.transform = tf(alive.row, alive.col);
+      else node.style.transform = tf(ev.from.row, ev.from.col);
+    }
+    await wait(160);
+  }
+
+  async function animFire(ev, before) {
+    var sh = before.pieces[ev.shooter];
+    var tg = before.pieces[ev.target];
+    if (!sh || !tg) return;
+    if (animOn()) {
+      var a = centerPx(sh.row, sh.col), b = centerPx(tg.row, tg.col);
+      var dx = b.x - a.x, dy = b.y - a.y;
+      var n = make('div', 'shot');
+      n.style.left = a.x + 'px';
+      n.style.top = a.y + 'px';
+      n.style.width = Math.sqrt(dx * dx + dy * dy) + 'px';
+      n.style.setProperty('--ang', Math.atan2(dy, dx) + 'rad');
+      fxAdd(n, 420);
+    }
+    await wait(260);
+    flashSquare(tg.row, tg.col);
+    floatLoss(tg.row, tg.col, ev.damage);
+    await wait(200);
+  }
+
+  async function animDie(ev) {
+    var node = pieceEls[ev.id];
+    if (node) {
+      node.style.transform = node.style.transform + ' scale(0.15)';
+      node.style.opacity = '0';
+    }
+    await wait(220);
+  }
+
+  async function animHeal(ev, after) {
+    var p = after.pieces[ev.id];
+    if (!p) return;
+    if (animOn()) {
+      var c = centerPx(p.row, p.col);
+      var n = make('div', 'ring');
+      n.style.left = (c.x - c.s * 0.45) + 'px';
+      n.style.top = (c.y - c.s * 0.45) + 'px';
+      n.style.width = (c.s * 0.9) + 'px';
+      n.style.height = (c.s * 0.9) + 'px';
+      fxAdd(n, 600);
+      floatText(p.row, p.col, '+' + fmt(ev.amount), 'float--heal');
+    }
+    await wait(320);
+  }
+
+  async function animMerge(ev, after) {
+    var p = after.pieces[ev.id];
+    if (!p) return;
+    if (animOn()) {
+      var c = centerPx(p.row, p.col);
+      for (var i = 0; i < 14; i++) {
+        var ang = (Math.PI * 2 * i) / 14 + Math.random() * 0.4;
+        var dist = c.s * (0.4 + Math.random() * 0.45);
+        var n = make('div', 'spark');
+        n.style.left = c.x + 'px';
+        n.style.top = c.y + 'px';
+        n.style.background = i % 2 ? playerColor(p.owner) : '#ffd782';
+        n.style.setProperty('--dx', (Math.cos(ang) * dist) + 'px');
+        n.style.setProperty('--dy', (Math.sin(ang) * dist) + 'px');
+        fxAdd(n, 600);
+      }
+    }
+    await wait(340);
+  }
+
+  async function animBanner(player) {
+    if (!animOn()) return;
+    var color = playerColor(player);
+    el.banner.textContent = t('player.' + player);
+    el.banner.style.background = color;
+    el.banner.style.color = outlineFor(color);
+    el.banner.classList.remove('is-on');
+    void el.banner.offsetWidth;
+    el.banner.classList.add('is-on');
+    await wait(520);
+  }
+
+  async function playEvents(events, before, after) {
+    for (var i = 0; i < events.length; i++) {
+      var ev = events[i];
+      switch (ev.type) {
+        case 'move': await animMove(ev); break;
+        case 'attack': await animAttack(ev, after); break;
+        case 'fire': await animFire(ev, before); break;
+        case 'die': await animDie(ev); break;
+        case 'heal': await animHeal(ev, after); break;
+        case 'merge': await animMerge(ev, after); break;
+        case 'turnStart': await animBanner(ev.player); break;
+        default: break;
+      }
+    }
+  }
+
+  /* ---------------------------------------------------- merge dialog ---- */
+
+  function baseOf(kind) { return Engine.KINDS[kind]; }
+
+  function mergedStats(piece, kind) {
+    var own = baseOf(piece.kinds[0]), add = baseOf(kind);
+    return {
+      maxStr: own.str + add.str,
+      str: piece.str + add.str,
+      move: Math.max(own.move, add.move),
+      fire: own.fire + add.fire,
+      range: own.range + add.range
+    };
+  }
+
+  function statLine(s) {
+    var out = t('stat.str') + ' <bdi>' + fmt(s.str) + '/' + fmt(s.maxStr) + '</bdi>' +
+      '<br>' + t('stat.move') + ' <bdi>' + s.move + '</bdi>';
+    if (s.fire > 0) {
+      out += '<br>' + t('stat.fire') + ' <bdi>' + s.fire + '</bdi> · ' +
+        t('stat.range') + ' <bdi>' + s.range + '</bdi>';
+    }
+    return out;
+  }
+
+  function renderMergeDialog() {
+    var st = G.state;
+    var p = st && st.pendingMerge ? st.pieces[st.pendingMerge] : null;
+    if (!p) return;
+    el.mergePiece.innerHTML = Icons.piece(p.kinds, {
+      owner: p.owner, str: p.str, maxStr: p.maxStr
+    });
+    var html = '';
+    for (var i = 0; i < KIND_ORDER.length; i++) {
+      var k = KIND_ORDER[i];
+      html += '<button type="button" class="merge-choice" data-kind="' + k + '">' +
+        '<span class="chip-ico">' + Icons.glyph(k) + '</span>' +
+        '<span class="merge-name">' + t('kind.' + k) + '</span>' +
+        '<span class="merge-stats">' + statLine(mergedStats(p, k)) + '</span>' +
+        '</button>';
+    }
+    el.mergeChoices.innerHTML = html;
+  }
+
+  function openMerge() {
+    renderMergeDialog();
+    el.overMerge.hidden = false;
+  }
+
+  function closeMerge() { el.overMerge.hidden = true; }
+
+  /* ------------------------------------------------------- game over ---- */
+
+  function renderOver() {
+    var w = G.state ? G.state.winner : null;
+    if (w === 'draw' || w === null) {
+      el.overSwatch.style.display = 'none';
+      el.overTitle.textContent = t('over.draw');
+    } else {
+      el.overSwatch.style.display = '';
+      el.overSwatch.style.background = playerColor(w);
+      el.overTitle.textContent = t('over.win', { name: t('player.' + w) });
+    }
+  }
+
+  function openOver() {
+    renderOver();
+    el.overOver.hidden = false;
+  }
+
+  function closeOver() { el.overOver.hidden = true; }
+
+  /* ----------------------------------------------------- persistence ---- */
+
+  function autosave() {
+    try {
+      if (!G.state || G.state.winner !== null) localStorage.removeItem(GAME_KEY);
+      else localStorage.setItem(GAME_KEY, Engine.serialize(G.state));
+    } catch (e) { /* no storage */ }
+  }
+
+  function savedCode() {
+    try { return localStorage.getItem(GAME_KEY); } catch (e) { return null; }
+  }
+
+  function hasSavedGame() {
+    var c = savedCode();
+    if (!c) return false;
+    try { Engine.deserialize(c); return true; } catch (e) { return false; }
+  }
+
+  function startGame(state) {
+    G.state = state;
+    G.history = [];
+    G.sel = null;
+    G.acts = [];
+    G.busy = false;
+    pieceEls = {};
+    clearNode(el.pieces);
+    clearNode(el.fx);
+    clearNode(el.marks);
+    closeMerge();
+    closeOver();
+    msg('');
+    show('game');
+    render();
+    autosave();
+    if (G.state.winner !== null) openOver();
+    else if (G.state.pendingMerge) openMerge();
+  }
+
+  function newGame() {
+    var st = Engine.newGame({
+      diagonalFire: !!G.settings.diagonalFire,
+      knightsJump: !!G.settings.knightsJump
+    });
+    startGame(st);
+    msg(t('msg.start', { name: t('player.' + st.turn.player) }));
+    G.busy = true;
+    animBanner(st.turn.player).then(function () { G.busy = false; renderMarks(); renderPanel(); });
+  }
+
+  function continueGame() {
+    var c = savedCode();
+    if (!c) return;
+    try { startGame(Engine.deserialize(c)); }
+    catch (e) { renderMenu(); }
+  }
+
+  /* a code may arrive as a bare string or inside a #g=... link */
+  function cleanCode(text) {
+    var s = String(text || '').trim();
+    var i = s.indexOf('#g=');
+    if (i >= 0) s = s.slice(i + 3);
+    return s.replace(/\s+/g, '');
+  }
+
+  function loadFromHash() {
+    var h = String(location.hash || '');
+    if (h.indexOf('#g=') !== 0) return false;
+    try {
+      var st = Engine.deserialize(cleanCode(h));
+      startGame(st);
+      return true;
+    } catch (e) { return false; }
+  }
+
+  function transferMsg(text) { el.transferMsg.textContent = text || ''; }
+
+  function doExport() {
+    var code = null;
+    if (G.state) code = Engine.serialize(G.state);
+    else code = savedCode();
+    if (!code) { transferMsg(t('settings.noGame')); return; }
+    el.exportCode.value = code;
+    copyExport();
+  }
+
+  function copyExport() {
+    var code = el.exportCode.value;
+    if (!code) { transferMsg(t('settings.noGame')); return; }
+    var done = function () { transferMsg(t('settings.copied')); };
+    var failed = function () {
+      el.exportCode.focus();
+      el.exportCode.select();
+      transferMsg(t('settings.copyFail'));
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(done, function () {
+        if (!legacyCopy()) failed(); else done();
+      });
+    } else if (legacyCopy()) done();
+    else failed();
+  }
+
+  function legacyCopy() {
+    try {
+      el.exportCode.focus();
+      el.exportCode.select();
+      return document.execCommand('copy');
+    } catch (e) { return false; }
+  }
+
+  function doImport() {
+    var code = cleanCode(el.importCode.value);
+    if (!code) { transferMsg(t('settings.importBad')); return; }
+    var st;
+    try { st = Engine.deserialize(code); }
+    catch (e) { transferMsg(t('settings.importBad')); return; }
+    transferMsg(t('settings.imported'));
+    startGame(st);
+  }
+
+  function doPaste() {
+    if (navigator.clipboard && navigator.clipboard.readText) {
+      navigator.clipboard.readText().then(function (text) {
+        el.importCode.value = text;
+        transferMsg('');
+      }, function () {
+        el.importCode.focus();
+        transferMsg(t('settings.pasteFail'));
+      });
+    } else {
+      el.importCode.focus();
+      transferMsg(t('settings.pasteFail'));
+    }
+  }
+
+  /* ----------------------------------------------------- rules screen --- */
+
+  function pieceTableHTML() {
+    var head = '<tr><th>' + t('stat.piece') + '</th><th class="num">' + t('stat.str') +
+      '</th><th class="num">' + t('stat.move') + '</th><th class="num">' + t('stat.fire') +
+      '</th><th class="num">' + t('stat.range') + '</th></tr>';
+    var body = '';
+    var order = ['S', 'K', 'A'];
+    for (var i = 0; i < order.length; i++) {
+      var k = order[i], b = Engine.KINDS[k];
+      var none = t('stat.none');
+      body += '<tr><td><span class="cell-piece">' +
+        '<span class="chip-ico">' + Icons.glyph(k) + '</span>' + t('kind.' + k) +
+        '</span></td>' +
+        '<td class="num">' + fmt(b.str) + '</td>' +
+        '<td class="num">' + b.move + '</td>' +
+        '<td class="num">' + (b.fire ? b.fire : none) + '</td>' +
+        '<td class="num">' + (b.fire ? b.range : none) + '</td></tr>';
+    }
+    return '<table class="rules-table"><thead>' + head + '</thead><tbody>' + body +
+      '</tbody></table>';
+  }
+
+  function combosHTML() {
+    var out = '<div class="combo-list">';
+    var combos = Engine.COMBOS;
+    for (var i = 0; i < combos.length; i++) {
+      out += '<div class="combo-item">';
+      for (var j = 0; j < combos[i].length; j++) {
+        if (j) out += '<span class="combo-plus">+</span>';
+        out += chip(combos[i][j]);
+      }
+      out += '</div>';
+    }
+    return out + '</div>';
+  }
+
+  function escapeHTML(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function renderRules() {
+    var blocks = I18N.rules(), out = '';
+    for (var i = 0; i < blocks.length; i++) {
+      var b = blocks[i];
+      if (b[0] === 'h') out += '<h3>' + escapeHTML(b[1]) + '</h3>';
+      else if (b[0] === 'p') out += '<p>' + escapeHTML(b[1]) + '</p>';
+      else if (b[0] === 'ul') {
+        out += '<ul>';
+        for (var j = 0; j < b[1].length; j++) out += '<li>' + escapeHTML(b[1][j]) + '</li>';
+        out += '</ul>';
+      } else if (b[0] === 'pieceTable') out += pieceTableHTML();
+      else if (b[0] === 'combos') out += combosHTML();
+    }
+    el.rulesBody.innerHTML = out;
+  }
+
+  /* -------------------------------------------------- settings screen --- */
+
+  function renderPresets() {
+    var out = '';
+    for (var i = 0; i < PRESETS.length; i++) {
+      var p = PRESETS[i];
+      out += '<button type="button" class="preset" data-preset="' + p.id + '">' +
+        '<span class="preset-swatches">' +
+        '<i style="background:' + p.sqLight + '"></i>' +
+        '<i style="background:' + p.sqDark + '"></i>' +
+        '<i style="background:' + p.p0 + '"></i>' +
+        '<i style="background:' + p.p1 + '"></i>' +
+        '</span><span>' + t('preset.' + p.id) + '</span></button>';
+    }
+    el.presets.innerHTML = out;
+  }
+
+  function fillSettingsForm() {
+    el.setP0.value = G.settings.p0;
+    el.setP1.value = G.settings.p1;
+    el.setLight.value = G.settings.sqLight;
+    el.setDark.value = G.settings.sqDark;
+    el.setRandom.checked = !!G.settings.randomBoard;
+    el.setAnim.checked = !!G.settings.animations;
+    el.setCoords.checked = !!G.settings.coordinates;
+    el.setDiagFire.checked = !!G.settings.diagonalFire;
+    el.setJump.checked = !!G.settings.knightsJump;
+    el.exportCode.value = G.state ? Engine.serialize(G.state) : (savedCode() || '');
+    transferMsg('');
+  }
+
+  function settingChanged() {
+    saveSettings();
+    applySettings();
+    if (G.state) renderPieces();
+  }
+
+  function applyPreset(id) {
+    for (var i = 0; i < PRESETS.length; i++) {
+      if (PRESETS[i].id === id) {
+        G.settings.p0 = PRESETS[i].p0;
+        G.settings.p1 = PRESETS[i].p1;
+        G.settings.sqLight = PRESETS[i].sqLight;
+        G.settings.sqDark = PRESETS[i].sqDark;
+        G.settings.randomBoard = false;
+        fillSettingsForm();
+        settingChanged();
+        return;
+      }
+    }
+  }
+
+  /* ------------------------------------------------------------ wiring -- */
+
+  function langButtons(node) {
+    node.innerHTML =
+      '<button type="button" class="lang-btn" data-lang="he" lang="he">עברית</button>' +
+      '<button type="button" class="lang-btn" data-lang="en" lang="en">English</button>';
+    node.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('.lang-btn') : null;
+      if (b) setLang(b.dataset.lang);
+    });
+  }
+
+  function cacheNodes() {
+    el.board = $('board');
+    el.squares = $('squares');
+    el.pieces = $('pieces');
+    el.marks = $('marks');
+    el.fx = $('fx');
+    el.banner = $('banner');
+
+    el.turnSwatch = $('turn-swatch');
+    el.turnName = $('turn-name');
+    el.turnNumber = $('turn-number');
+    el.comboUsed = $('combo-used');
+    el.comboAvail = $('combo-avail');
+    el.panelMsg = $('panel-msg');
+
+    el.btnHeal = $('btn-heal');
+    el.btnEndTurn = $('btn-endturn');
+    el.btnUndo = $('btn-undo');
+    el.btnContinue = $('btn-continue');
+
+    el.rulesBody = $('rules-body');
+    el.presets = $('presets');
+
+    el.setP0 = $('set-p0');
+    el.setP1 = $('set-p1');
+    el.setLight = $('set-light');
+    el.setDark = $('set-dark');
+    el.setRandom = $('set-random');
+    el.setAnim = $('set-anim');
+    el.setCoords = $('set-coords');
+    el.setDiagFire = $('set-diagfire');
+    el.setJump = $('set-jump');
+    el.exportCode = $('export-code');
+    el.importCode = $('import-code');
+    el.transferMsg = $('transfer-msg');
+
+    el.overMerge = $('overlay-merge');
+    el.mergePiece = $('merge-piece');
+    el.mergeChoices = $('merge-choices');
+    el.overOver = $('overlay-over');
+    el.overSwatch = $('over-swatch');
+    el.overTitle = $('over-title');
+  }
+
+  function wire() {
+    $('btn-new').addEventListener('click', newGame);
+    $('btn-continue').addEventListener('click', continueGame);
+    $('btn-rules').addEventListener('click', function () { show('rules'); });
+    $('btn-settings').addEventListener('click', function () { show('settings'); });
+
+    var backs = document.querySelectorAll('[data-go]');
+    for (var i = 0; i < backs.length; i++) {
+      backs[i].addEventListener('click', function (e) {
+        show(e.currentTarget.getAttribute('data-go'));
+      });
+    }
+
+    el.btnEndTurn.addEventListener('click', endTurn);
+    el.btnUndo.addEventListener('click', undo);
+    el.btnHeal.addEventListener('click', function () {
+      if (G.sel) doAction({ type: 'heal', piece: G.sel });
+    });
+    $('btn-gamemenu').addEventListener('click', function () { show('menu'); });
+
+    el.board.addEventListener('pointerdown', onBoardPointer);
+    el.board.addEventListener('dblclick', function (e) { e.preventDefault(); });
+    el.board.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+    el.mergeChoices.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('.merge-choice') : null;
+      if (!b || !G.state || !G.state.pendingMerge) return;
+      var id = G.state.pendingMerge;
+      closeMerge();
+      doAction({ type: 'merge', piece: id, kind: b.dataset.kind });
+    });
+    $('btn-merge-skip').addEventListener('click', function () {
+      if (!G.state || !G.state.pendingMerge) return;
+      var id = G.state.pendingMerge;
+      closeMerge();
+      doAction({ type: 'skipMerge', piece: id });
+    });
+
+    $('btn-again').addEventListener('click', function () { closeOver(); newGame(); });
+    $('btn-over-menu').addEventListener('click', function () { closeOver(); show('menu'); });
+
+    el.presets.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('.preset') : null;
+      if (b) applyPreset(b.dataset.preset);
+    });
+
+    function colorInput(node, key) {
+      var isSquare = (key === 'sqLight' || key === 'sqDark');
+      var h = function () {
+        G.settings[key] = node.value;
+        /* a square color chosen by hand turns the random board off,
+           otherwise the choice would show nothing */
+        if (isSquare && G.settings.randomBoard) {
+          G.settings.randomBoard = false;
+          el.setRandom.checked = false;
+        }
+        settingChanged();
+      };
+      node.addEventListener('input', h);
+      node.addEventListener('change', h);
+    }
+    colorInput(el.setP0, 'p0');
+    colorInput(el.setP1, 'p1');
+    colorInput(el.setLight, 'sqLight');
+    colorInput(el.setDark, 'sqDark');
+
+    el.setRandom.addEventListener('change', function () {
+      G.settings.randomBoard = el.setRandom.checked;
+      if (G.settings.randomBoard && !G.settings.boardColors) {
+        G.settings.boardColors = makeBoardColors();
+      }
+      settingChanged();
+    });
+    $('btn-reshuffle').addEventListener('click', function () {
+      G.settings.boardColors = makeBoardColors();
+      G.settings.randomBoard = true;
+      el.setRandom.checked = true;
+      settingChanged();
+    });
+
+    el.setAnim.addEventListener('change', function () {
+      G.settings.animations = el.setAnim.checked;
+      settingChanged();
+    });
+    el.setCoords.addEventListener('change', function () {
+      G.settings.coordinates = el.setCoords.checked;
+      settingChanged();
+    });
+    el.setDiagFire.addEventListener('change', function () {
+      G.settings.diagonalFire = el.setDiagFire.checked;
+      saveSettings();
+    });
+    el.setJump.addEventListener('change', function () {
+      G.settings.knightsJump = el.setJump.checked;
+      saveSettings();
+    });
+
+    $('btn-export').addEventListener('click', doExport);
+    $('btn-copy').addEventListener('click', copyExport);
+    $('btn-import').addEventListener('click', doImport);
+    $('btn-paste').addEventListener('click', doPaste);
+
+    window.addEventListener('resize', measure);
+    window.addEventListener('orientationchange', function () {
+      measure();
+      setTimeout(measure, 300);
+    });
+  }
+
+  /* -------------------------------------------------------------- init -- */
+
+  function init() {
+    Engine = window.WarGame.Engine;
+    cacheNodes();
+    if (window.matchMedia) reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+    G.settings = loadSettings();
+    if (G.settings.randomBoard && !G.settings.boardColors) {
+      G.settings.boardColors = makeBoardColors();
+    }
+    I18N.set(G.settings.lang);
+
+    buildSquares();
+    langButtons($('lang-switch-menu'));
+    langButtons($('lang-switch-settings'));
+    wire();
+
+    applySettings();
+    refreshTexts();
+
+    if (!loadFromHash()) show('menu');
+    measure();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+
+  window.WarGame.UI = {
+    init: init,
+    newGame: newGame,
+    show: show,
+    setLang: setLang,
+    state: function () { return G.state; },
+    settings: function () { return G.settings; }
+  };
+})();
+</script>
+</body>
+</html>

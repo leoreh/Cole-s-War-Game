@@ -1,0 +1,257 @@
+# War Game: design and build spec (version 2)
+
+War Game is a two-player board game on an 8x8 chess board, played on one device (hot seat) on a PC, an iPad or a phone. It is a single-page web app with no build dependencies, no network use while playing and no frameworks, hosted on GitHub Pages so that anyone opens one link, and also available as one self-contained HTML file. The interface is in Hebrew and in English.
+
+Version 2 (2026-09-22, second round; version 1 is kept as `spec.v1.md`) changes the rules (health separate from strength, path movement with costs, passing over own pieces, archers with range 2 that move one step and fire), the interface (the board always visible, menu and settings as overlays with live changes, an Invite button), the looks (themes with their own piece sets and board decoration, richer animations, a real arrow) and the distribution (its own git repository, GitHub Pages, installable as a home-screen app, offline through a service worker).
+
+# Files
+
+Everything lives in `D:\Vaults\Obsi_Code\War Game\`, gitignored by the vault and a git repository of its own, pushed to `https://github.com/leoreh/Cole-s-War-Game`, served by GitHub Pages from the `docs` folder at `https://leoreh.github.io/Cole-s-War-Game/`.
+
+- `src/index.html`: the shell. Classic `<script src>` tags in this order: `i18n.js`, `themes.js`, `icons.js`, `engine.js`, `ui.js`. No ES modules, so the file works from `file://`.
+- `src/style.css`: all styling, including the per-theme board decoration.
+- `src/i18n.js`: `window.WarGame.I18N`. All user-visible strings in `he` and `en`, and `t(key, vars)`.
+- `src/themes.js`: `window.WarGame.Themes`. The piece glyph sets and palettes of each theme.
+- `src/icons.js`: `window.WarGame.Icons`. Composes a piece (glyph from the theme, hybrid sub-glyph, badges); keeps the classic glyphs as the fallback.
+- `src/engine.js`: `window.WarGame.Engine`. Pure rules, no DOM, no globals besides that object.
+- `src/ui.js`: `window.WarGame.UI`. Rendering, input, animation, settings, persistence, invite, service worker registration.
+- `src/sw.js`: the service worker (see Offline).
+- `src/manifest.webmanifest`: the web app manifest (see Install).
+- `tests/engine.test.html`: loads `../src/engine.js`, runs the assertions below, prints the results into `<pre id="out">` and sets `document.title` to `PASS` or `FAIL n`.
+- `dev/themes.html`: a harness that shows every theme's pieces at 40, 64 and 90 px on light, dark, night and colorful squares, both owners, and a hybrid.
+- `dev/make_icons.py`: draws the app icons with Pillow into `docs/icons/` (see Install).
+- `build.py`: builds `docs/index.html` (everything inlined), `docs/sw.js` (versioned), copies `docs/manifest.webmanifest`, and also writes `WarGame.html` at the folder root as the offline single file. Run with `python build.py`. Idempotent.
+- `docs/`: the build output that GitHub Pages serves. `WarGame.html`: the same page as one file for copying by hand.
+- `README.md`: for the repository: what the game is, the link, how to install it on an iPhone or iPad, how to play, how to build.
+
+Target browsers: Safari on iOS and iPadOS 15 or later, current Chrome and Edge on Windows. ES2020 is fine. No external fonts, images or scripts (inline `data:` URIs are fine). Use `system-ui` fonts.
+
+# Rules
+
+## Board and setup
+
+Squares are addressed as `{row, col}`, both 0 to 7. Player 0 sets up on rows 0 to 2 and advances toward row 7. Player 1 sets up on rows 7 to 5 and advances toward row 0. The far row is 7 for player 0 and 0 for player 1.
+
+Setup per player: 8 soldiers on the back row (row 0 for player 0, row 7 for player 1); 4 knights on the second row at columns 2 to 5; 4 archers on the third row at columns 2 to 5.
+
+## Pieces
+
+| Kind | Code | Strength | Health | Move | Fire strength | Fire range |
+|---|---|---|---|---|---|---|
+| Soldier | S | 1 | 1 | 2 | 0 | 0 |
+| Knight | K | 3 | 3 | 4 | 0 | 0 |
+| Archer | A | 0 | 3 | 2 | 2 | 2 |
+
+Health is how much damage a piece can take; strength is how much damage its melee attack does. Every piece has a current health `hp` and a max health `maxHp`, in steps of 0.5. A piece whose health reaches 0 or below dies.
+
+A piece's current melee strength is `min(hp, baseStr)`, where `baseStr` is the sum of the base strengths of its kinds. So for a soldier or a knight strength and health are one number that falls together (a knight at health 2 hits for 2, which is what makes the original example hold: a knight at 2 attacking a knight at 3 leaves it at 1), an archer's strength is always 0, and a knight-archer at full health 6 hits for 3. A piece with strength 0 cannot attack in melee.
+
+## Movement
+
+Movement is a path of steps within a budget of `move` points. An orthogonal step (up, down, left, right) costs 1. A diagonal step costs 2 and exists only with the rule toggle `diagonalMoves` (default on). The path may change direction. Legal destinations and their cheapest paths come from a Dijkstra over step costs.
+
+A square holding one of the mover's own pieces is passed over freely. A square holding an enemy piece is never passed over. The path ends on an empty square (a move) or on an enemy piece (an attack, see below); never on an own piece. So a soldier (move 2) reaches any square one or two orthogonal steps away in a line or around a corner, or one diagonal square; a knight (move 4) reaches up to two diagonal steps, or one diagonal plus two orthogonal, and so on.
+
+## Melee attack
+
+An attack is a move whose destination holds an enemy. The attacker needs strength above 0. Attacker strength `a`, defender strength `d`, both taken before any damage. The attacker's health loses `d`, the defender's health loses `a`. Dead pieces are removed. If the defender dies and the attacker lives, the attacker moves into the square; otherwise the attacker stays where it was. Both may survive: a soldier (1) attacking an archer (health 3, strength 0) leaves the archer at 2 and the soldier untouched, in place.
+
+The original examples still hold: soldier attacks soldier, both die; knight (3) attacks soldier, the soldier dies and the knight is at 2; soldier attacks knight (3), the soldier dies and the knight is at 2; soldier attacks a knight at 1, both die; a knight at 2 attacks a knight at 3, the attacker dies and the defender is at 1.
+
+## Fire
+
+A piece with fire strength above 0 may fire at one enemy piece in the same row or column at a distance of at most its fire range. Fire is never diagonal. The target's health loses the fire strength; the shooter loses nothing and does not move. Fire needs no clear line: pieces in between do not block.
+
+Move and fire: a piece with fire strength that moves by exactly one step (one orthogonal step, or one diagonal step when diagonal moves are on) may still fire later in the same turn, from its new square, as part of the same activation. A move of two or more steps forfeits the fire. Firing without moving, or moving without firing, is also allowed. A piece that fires first cannot move afterwards. The fire stays available until the piece fires or the turn ends.
+
+## Turn
+
+A turn belongs to one player. The player activates pieces one at a time; an activated piece takes one action (move, attack, fire, or heal), plus the fire that a one-step move of a firing piece allows, and is then locked for the rest of the turn.
+
+The pieces that move, attack or fire in one turn are limited by these combinations, counted by combo kind: `K+S`, `K+A`, `S+S+S`, `A+S+S`, `A+A+S`. Fewer pieces than a full combination is allowed. A piece may be activated when the multiset of combo kinds used so far, plus this piece's kind, is a sub-multiset of at least one combination. So at most one knight per turn, and with a knight only one other piece.
+
+The combo kind of a hybrid is K if its kinds include K, else A if they include A, else S.
+
+Healing is outside the combination count: any number of injured pieces may heal in a turn, but a healing piece takes no other action that turn and a piece that has acted cannot heal. Healing adds 0.5 health, capped at max health, applied immediately.
+
+The turn ends when the player ends it explicitly. Within a turn the player may undo actions one at a time (the UI keeps state snapshots).
+
+At the start of a turn, if the player to move has no legal action at all, the turn passes to the other player with a `pass` event. If neither player has a legal action, the game is a draw.
+
+The first player is chosen at random when a game starts, and the UI says who starts.
+
+## Merge (promotion)
+
+When a piece that has a single kind ends a move or attack alive on its far row, the player chooses a kind (S, K or A, its own kind included) to merge with, or declines. The engine sets `pendingMerge` to that piece's id; until it is resolved by `merge` or `skipMerge`, no other action is legal, `endTurn` included.
+
+A merged piece is a hybrid with two kinds `[own, chosen]`. Its stats: `baseStr` is the sum of the two base strengths; `maxHp` is the sum of the two base healths; `hp` is the old `hp` plus the chosen kind's base health; move is the max of the two; fire strength is the sum; fire range is the max. A hybrid never merges again. Examples: K+A moves 4, health 6, strength 3, fires 2 at range 2. K+K moves 4, health 6, strength 6. S+S moves 2, health 2, strength 2. A+A moves 2, health 6, strength 0, fires 4 at range 2. S+A moves 2, health 4, strength 1, fires 2 at range 2.
+
+## End of game
+
+A player with no pieces loses. If both players lose their last pieces in the same attack, the game is a draw. Checked after every action.
+
+# Engine API
+
+`window.WarGame.Engine` exposes these. State objects are plain JSON-serializable data; every function returns a new state and never mutates its input.
+
+```
+KINDS: { S: {str:1, hp:1, move:2, fire:0, range:0}, K: {...}, A: {...} }
+COMBOS: [['K','S'], ['K','A'], ['S','S','S'], ['A','S','S'], ['A','A','S']]
+DEFAULT_RULES: { diagonalMoves: true }
+
+newGame(rules?, firstPlayer?) -> state
+  rules merged over DEFAULT_RULES; firstPlayer 0 or 1, random when omitted
+
+state = {
+  rules,
+  pieces: { [id]: { id, owner: 0|1, kinds: ['K'] | ['K','A'], hp, maxHp, row, col } },
+  turn: { player, number, used: [{ id, kind: 'K'|'A'|'S'|null, fireLeft: boolean }] },  // kind null for a heal
+  pendingMerge: id | null,
+  winner: null | 0 | 1 | 'draw',
+  firstPlayer
+}
+
+pieceStats(piece) -> { str, baseStr, hp, maxHp, move, fire, range, comboKind }
+comboKind(piece) -> 'K' | 'A' | 'S'
+pieceAt(state, row, col) -> piece | null
+piecesOf(state, player) -> piece[]
+usedKinds(state) -> ['K', ...]
+activatableKinds(state) -> Set of combo kinds that may still be added this turn
+canActivate(state, id) -> boolean   (owner is turn.player, not in turn.used, no pendingMerge, no winner, kind fits)
+canHeal(state, id) -> boolean
+canFireAgain(state, id) -> boolean  (in turn.used with fireLeft true)
+reachable(state, id) -> { "r,c": { cost, steps, path: [{row,col}, ...] } }  cheapest path to every square the piece can end on
+legalActions(state, id) -> [
+    {type:'move', to:{row,col}, cost, path} | {type:'attack', target:id, cost, path} |
+    {type:'fire', target:id} | {type:'heal'} ]
+    move/attack/fire when canActivate; only fire when canFireAgain; heal when canHeal.
+hasAnyAction(state) -> boolean
+apply(state, action) -> { state, events }   throws Error('illegal action') on an illegal action
+    actions: move {piece,to}, attack {piece,target}, fire {piece,target}, heal {piece},
+             merge {piece,kind}, skipMerge {piece}, endTurn
+    events, in order:
+      { type:'move', id, from, to, path, cost, fireLeft }
+      { type:'attack', attacker, defender, from, to, path, attackerLoss, defenderLoss, attackerMoved }
+      { type:'fire', shooter, target, damage }
+      { type:'die', id, owner, at }
+      { type:'heal', id, amount, hp }
+      { type:'mergePending', id }
+      { type:'merge', id, kinds }
+      { type:'turnEnd', player }
+      { type:'turnStart', player, number }
+      { type:'pass', player }
+      { type:'gameOver', winner }
+serialize(state) -> 'WG2.' + url-safe base64 JSON
+deserialize(string) -> state   throws on a bad string, including a 'WG1.' code
+```
+
+`path` lists the squares stepped on, ending at the destination, not including the start. A move action carries only `to`; the engine uses the cheapest path. `fireLeft` is set when the path has exactly one step. A `fire` by a piece with `fireLeft` sets it false and adds no `used` entry. Piece ids `p0-0` to `p0-15` (soldiers 0 to 7, knights 8 to 11, archers 12 to 15) and the same for `p1`.
+
+# Engine tests
+
+`tests/engine.test.html` asserts at least:
+
+- Setup: 32 pieces, each player 8 S on the back row, 4 K at row 1 or 6 columns 2 to 5, 4 A at row 2 or 5 columns 2 to 5; archers have hp 3.
+- The five melee examples above with the survivor's position, and soldier attacks archer: archer at 2, soldier unharmed and in place.
+- Strength follows health: a knight at 2 hits for 2; a K+A at 6 hits for 3, at 2 hits for 2.
+- Movement: a soldier reaches every square at path cost 2 or less, including around a corner; a knight at cost 4; an enemy blocks a path and is never passed; an own piece is passed over; with `diagonalMoves` a soldier reaches the diagonal neighbours at cost 2 and a knight the two-step diagonal; without it a diagonal neighbour is reached only around the corner. No move onto an own piece. `reachable` reports the cheapest cost and a path whose squares are adjacent in order.
+- An archer has no attack actions. Fire at range 2 in a row or column, over an intervening piece; never diagonal; a knight at 3 drops to 1; a soldier dies; an archer at 3 drops to 1.
+- Move then fire: an archer that moved one step has fire actions and `canFireAgain` and no move actions; after firing it has none; an archer that moved two steps has none; the fire adds no combo slot (K acts, A moves one step, A fires, then nothing else is activatable; and A moves one step, S, S act, A still fires).
+- Combos: after K, only S or A; after S+S, A or S, not K; after A+A, only S; after A+S+S, nothing; three archers never.
+- Heal: +0.5 up to max, a healed piece cannot move, a moved piece cannot heal, healing does not consume a slot; an archer at 2 can heal.
+- Merge: a soldier reaching row 7 gets `pendingMerge`; `endTurn` throws while pending; S merged with K gives hp 4, maxHp 4, baseStr 4, move 4; S merged with A gives fire 2 range 2, maxHp 4; A merged with A gives fire 4 range 2, maxHp 6; a hybrid reaching the far row again gets no `pendingMerge`; `skipMerge` clears it.
+- Win, draw, pass, serialize round trip, no mutation of inputs, `deserialize('WG1.x')` throws.
+
+# UI
+
+## Screens as overlays
+
+The board is always on screen. When no game is running, it shows the opening position (a fresh game with player 0 first, not interactive, pieces slightly dimmed). Every other screen is an overlay over the board, so that a change of colors or theme shows on the real board at once:
+
+- Menu: a centered card over the dimmed board. New game, Resume (when a game is in progress), Rules, Settings, Invite, language switch. New game while a game is in progress asks for a confirmation inside the card (The current game will be lost. Start anyway / Back). On first load with no saved game the menu is open; on load with a saved game the game is shown directly with the menu closed.
+- Settings: a drawer that slides in from the inline end in landscape and up from the bottom in portrait, over the panel area, with a close button and closing on a tap outside; the board stays visible. Sections: Appearance (theme, player colors, square colors, presets, random colorful board with Reshuffle, animations, coordinates), Rules (the diagonal moves toggle, with the note Applies at the next new game), Language, Transfer (Export game with the code shown and copied, Import game). Every appearance change applies immediately to the board on screen. Settings persist in `localStorage` under `wargame.settings`.
+- Rules: a scrollable sheet over the board.
+- Merge dialog and Game over: centered cards.
+
+The game panel has, besides End turn, Undo and Menu, a small palette button that opens the settings drawer on Appearance. Transitions are short fades and slides (150 to 250 ms), never a page-like jump.
+
+## Invite
+
+An Invite button on the menu (and a small share icon in the game panel) shares the game. It builds a short message in the current language: one line saying what it is, the link `https://leoreh.github.io/Cole-s-War-Game/`, and one line saying how to put it on the home screen (Safari, Share, Add to Home Screen). When `navigator.share` exists (iPhone, iPad, Android) it opens the system share sheet with that text; otherwise it copies the text to the clipboard and shows the message in a small card with a Copy button, so it can also be selected by hand. The link is the constant `GAME_URL` in `ui.js`, never `location.href`, so it is right even from `file://`. When a game is in progress the card offers a second option, Share this game, whose link carries the state as `#g=<code>` so the other person opens the same position.
+
+## Board and pieces
+
+The board is a square that fits the shorter side of the viewport minus the panel. The panel sits at the inline end of the board in landscape and below it in portrait. The board container has `direction: ltr` always. On a phone (width under 600 px) the panel is a compact bar under the board with the same controls in one or two rows.
+
+Pieces are inline SVG from the current theme through `Icons.piece(kinds, opts)`, filled with the owner's color, with a contrasting outline computed from the color's luminance, and a soft shadow. Player 0 faces up the board and player 1 down, where the glyph has a facing.
+
+Badges: a health badge at the bottom corner shows `hp`; it is amber when `hp < maxHp`. A small strength badge with a sword mark shows the melee strength when it differs from `hp` and is above 0 (a knight-archer at 6 shows health 6 and strength 3; an archer shows health only). Hybrids show the second kind small at the top corner. A used piece is dimmed; a used piece that may still fire is not dimmed and carries a small bow mark that pulses.
+
+Tap a piece: legal destinations show as soft dots (all reachable squares, diagonal ones too), attack targets as a red ring, fire targets as an orange ring with a bow mark; a Heal button appears when it can heal. After a one-step move of a firing piece, the piece stays selected with its fire targets shown and the panel says it may still fire; tapping elsewhere leaves the fire available until the turn ends.
+
+## Themes
+
+`window.WarGame.Themes` (in `themes.js`):
+
+```
+list: ['classic', 'heraldic', 'ink', 'neon', 'toy']   // ids in display order
+get(id) -> {
+  id,
+  name: { he, en },
+  palette: { p0, p1, light, dark },        // applied when the theme is chosen; the user may then change any color
+  boardClass: 'theme-classic',             // put on the board element and on <body> for the decoration CSS
+  glyph(kind, opts) -> svg string          // opts: { flip: boolean, cls: string }, viewBox 0 0 100 100
+}
+```
+
+Glyphs use `currentColor` for the owner color and `var(--piece-outline)` for the contrasting outline; fixed accents (steel, wood, skin, leather, glow) are allowed as long as they read on both a light and a dark owner color. Each theme's three glyphs share one style and one line weight; hybrids compose the main glyph with the second kind small at the top corner, the same way for every theme.
+
+- Classic: the current heraldic emblem set (shield with crossed swords, horse head, bow with arrow), refined. Board: dark wood frame with a subtle grain and brass corners, squares with a faint grain.
+- Heraldic: people. Soldier: a standing figure with a helmet, a sword and a shield, tabard in the owner color. Knight: a mounted rider on a horse, lance or sword raised, caparison in the owner color. Archer: a figure drawing a longbow, hood and tunic in the owner color. Readable at 48 px, detailed at 90 px. Board: parchment squares with faint map-like hatching on the light ones, a tapestry-like border with a repeating motif, a soft vignette.
+- Ink: brush-like glyphs, as if painted with a wet brush in one or two strokes, slightly rough edges, on a paper board with a brushed frame and a faint paper grain.
+- Neon: glowing outlines (no fill, stroke in the owner color with a glow) on a dark board of dark tiles with thin glowing grid lines; palette with a cyan and a magenta player and near-black squares.
+- Toy: chunky, rounded, friendly pieces like wooden board-game tokens: a meeple with a little shield, a rocking-horse knight, a meeple with a bow; bold outlines, simple shapes, a highlight spot. Board: a bright frame with rounded corners and a dotted border, squares with a soft inner highlight, a playful gradient background.
+
+`Icons.piece(kinds, opts)` takes `opts.theme` (an id) and uses that theme's `glyph`; with no theme or an unknown id it uses `classic`. `Icons.glyph(kind, opts)` likewise. All decoration is CSS gradients and inline SVG `data:` URIs under `.theme-<id>`; the user's square colors stay the base color of each square, decoration is an overlay at low opacity. Choosing a theme applies its palette. Picking a color, a preset or a theme switches the random board off.
+
+## Animations
+
+Short (200 to 500 ms), 2D, CSS transitions and keyframes, plus a few JS-driven ones; all off under `prefers-reduced-motion` or the animations setting.
+
+- Move: the piece slides along its path, square by square, faster for longer paths, with a small lift (shadow grows) while moving.
+- Attack: the attacker slides along its path and lunges into the defender; a sword-clash flash with a few spark particles at the contact point; floating loss numbers; the dead piece breaks into six to eight fragments that fall and fade; the survivor settles.
+- Fire: an SVG arrow with fletching flies from the shooter to the target along the row or column with a slight arc and a rotation to its direction of travel; on impact a small burst, the target flashes and shakes; loss number.
+- Heal: a green pulse and three small sparkles rising, plus `+0.5`.
+- Merge: a burst of colored particles and the new glyph scales in.
+- Turn change: a ribbon banner in the new player's color slides across the board.
+- Selected piece: a gentle bob. Legal squares: dots pulse softly. Hover (pointer devices): a lift with a larger shadow.
+
+Play the animations by consuming the events list from `Engine.apply`, then render the new state. Input is blocked while animating.
+
+## Colors
+
+Defaults come from the Classic theme's palette: player 0 `#efe6cf`, player 1 `#2f3550`, light square `#efe0c3`, dark square `#a97e57`. Presets (Wood, Marble, Forest, Ocean, Rose, Night) set the four colors together. The random colorful board picks a hue per square, saturation around 45 percent, lightness alternating around 72 and 58 by square parity; Reshuffle regenerates it; the layout is stored with the settings.
+
+## Language and direction
+
+`document.documentElement.lang` and `dir` follow the language (`he` / `rtl`, `en` / `ltr`). Default on first run: Hebrew when `navigator.language` starts with `he`, else English. All layout uses logical properties. Numbers and codes are wrapped in `<bdi>` or `dir="ltr"` spans. Directional icons flip in RTL. The Hebrew must read like native Hebrew; the terms of version 1 stay (Soldier חייל, Knight אביר, Archer קשת, Strength כוח, Move תנועה, Attack תקיפה, Fire ירי, Heal ריפוי, Merge מיזוג, Hybrid כלאיים, Turn תור, End turn סיום תור, Undo ביטול, Player שחקן, Winner המנצח, Draw תיקו, Rules חוקים, Settings הגדרות, New game משחק חדש, Menu תפריט, Language שפה, Board לוח, Colors צבעים, Game name משחק מלחמה), with these added: Health בריאות, Theme ערכת נושא, Classic קלאסי, Heraldic הרלדי, Ink דיו, Neon ניאון, Toy צעצוע, Appearance מראה, Transfer העברה, Resume חזרה למשחק, Invite הזמנה, Share this game שיתוף המשחק הזה, Diagonal movement תנועה באלכסון, May still fire יכול עדיין לירות, Applies at the next new game חל מהמשחק הבא.
+
+## iPad and iPhone
+
+`<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">`, `apple-mobile-web-app-capable`, `apple-mobile-web-app-status-bar-style` black-translucent, `apple-mobile-web-app-title` War Game, `touch-action: manipulation`, `-webkit-tap-highlight-color: transparent`, `-webkit-user-select: none` on the board, safe-area padding. Pointer events. No double-tap zoom on the board. The game must be playable on a phone in portrait: the board takes the full width, the panel sits below as a compact bar.
+
+## Install
+
+`src/manifest.webmanifest`: name War Game, short_name War Game, `start_url` `./`, `scope` `./`, `display` standalone, `background_color` `#141821`, `theme_color` `#141821`, icons `icons/icon-192.png`, `icons/icon-512.png` (purpose any and maskable). `index.html` links it with `<link rel="manifest" href="manifest.webmanifest">` and `<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">` (180 px). `dev/make_icons.py` draws the three PNGs with Pillow into `docs/icons/`: a rounded dark square `#1d2233` with the classic shield-and-crossed-swords emblem in cream `#efe6cf`, with a safe margin of 15 percent for the maskable form. The `docs/icons` folder is committed (the build does not regenerate icons).
+
+## Offline
+
+`src/sw.js` is a service worker that caches `./`, `./index.html`, `./manifest.webmanifest` and the icons at install, cache-first with a background refresh, under a cache name that carries a version string `__VERSION__`, deleting older caches on activate. `ui.js` registers `./sw.js` only when `location.protocol` is `https:` or the host is `localhost`, never on `file://`, and ignores failures silently. `build.py` writes `docs/sw.js` with `__VERSION__` replaced by the first 12 hex digits of the SHA-256 of `docs/index.html`, so every build invalidates the old cache.
+
+# Build
+
+`build.py` (Python 3, standard library only): read `src/index.html`; replace each `<link rel="stylesheet" href="X">` with `<style>` + the file's content + `</style>`; replace each `<script src="X"></script>` with `<script>` + content + `</script>`; write `docs/index.html` and `WarGame.html`, UTF-8, no BOM; write `docs/sw.js` as described under Offline; copy `src/manifest.webmanifest` to `docs/`. Print the output paths and sizes.
+
+# Repository
+
+The folder is its own git repository (`git init` in `War Game`, branch `main`), with a `.gitignore` for `__pycache__/` and `.DS_Store`. It is pushed to `https://github.com/leoreh/Cole-s-War-Game` (GitHub Pages on a free account needs a public repository; the repository was created private and must be made public, or the account upgraded, for the link to work), and Pages is set to serve from `main` at `/docs`. The vault's `.gitignore` already ignores the folder, so the nested repository does not touch the vault's history.
