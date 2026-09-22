@@ -221,6 +221,47 @@ body {
 }
 .lang-btn.is-on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 
+/* the segmented controls of the new game sheet: one track, the chosen
+   segment filled with the accent. The segments share the track equally,
+   so two or three of them fit a phone in either language */
+.seg[hidden] { display: none; }   /* a class display beats the plain attribute */
+.seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+}
+.seg-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  font-weight: 600;
+  flex: 1 1 0;
+  min-inline-size: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-pill);
+  padding: 0.45em 0.4em;
+  min-block-size: 40px;
+  cursor: pointer;
+  touch-action: manipulation;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.seg-btn:hover { color: var(--fg); background: var(--soft-2); }
+.seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.seg-btn.is-on {
+  color: var(--accent-ink);
+  background: var(--accent);
+  box-shadow: var(--btn-drop);
+}
+.seg-btn.is-on:hover { background: var(--accent); color: var(--accent-ink); }
+
 /* --------------------------------------------------- stage and board --- */
 
 .stage {

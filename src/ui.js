@@ -19,7 +19,14 @@ window.WarGame = window.WarGame || {};
 
   var SETTINGS_KEY = 'wargame.settings';
   var GAME_KEY = 'wargame.game';
+  var MODE_KEY = 'wargame.mode';
   var KIND_ORDER = ['K', 'A', 'S'];
+
+  /* against the computer the human is always player 0, the light side at
+     the bottom of the board, and the computer is player 1 */
+  var HUMAN = 0;
+  var COMPUTER = 1;
+  var LEVELS = ['easy', 'medium', 'hard'];
 
   /* the link is a constant, so an invite sent from a file:// copy or from
      the home-screen app still points at the page everyone can open */
@@ -36,7 +43,9 @@ window.WarGame = window.WarGame || {};
     boardColors: null,
     animations: true,
     coordinates: false,
-    diagonalMoves: true
+    diagonalMoves: true,
+    opponent: 'human',     /* the New game sheet remembers the last choice */
+    level: 'medium'
   };
 
   var PRESETS = [
@@ -53,10 +62,13 @@ window.WarGame = window.WarGame || {};
   var G = {
     settings: null,
     state: null,      /* the game on the board: there is always one */
-    history: [],      /* states before each action of the current turn */
+    mode: 'human',    /* 'human': two players; 'computer': player 1 is the AI */
+    level: 'medium',  /* the computer's level in this game */
+    history: [],      /* { state, start } before each action: see pushHistory */
     sel: null,        /* id of the selected piece */
     acts: [],         /* its legal actions */
-    busy: false,      /* animating: input is blocked */
+    busy: false,      /* animating or the computer is playing: input is blocked */
+    aiRun: 0,         /* the id of the computer turn now playing */
     boardClass: ''    /* the theme class now on the board and on <body> */
   };
 
@@ -104,6 +116,22 @@ window.WarGame = window.WarGame || {};
   }
 
   function playerColor(p) { return p === 1 ? G.settings.p1 : G.settings.p0; }
+
+  /* every place a player is named reads it from here: against the computer
+     the two sides are the human and the machine, not player 1 and player 2 */
+  function playerName(p) {
+    if (G.mode === 'computer') {
+      return t(p === COMPUTER ? 'player.computer' : 'player.you');
+    }
+    return t('player.' + p);
+  }
+
+  function levelOf(v) { return LEVELS.indexOf(v) >= 0 ? v : 'medium'; }
+
+  function setMode(opponent, level) {
+    G.mode = opponent === 'computer' ? 'computer' : 'human';
+    G.level = levelOf(level || G.settings.level);
+  }
 
   /* activatableKinds gives a Set; an array reads the same way here */
   function inKinds(set, kind) {
@@ -270,6 +298,7 @@ window.WarGame = window.WarGame || {};
     shareMsg('');
     renderPieces();
     if (G.state) { renderPanel(); renderMarks(); }
+    if (isOpen('newgame')) renderNewGame();
     if (isOpen('merge')) renderMergeDialog();
     if (isOpen('over')) renderOver();
     if (isOpen('share')) renderShare();
@@ -342,11 +371,11 @@ window.WarGame = window.WarGame || {};
     }, 230);
   }
 
-  var OVERLAYS = ['appearance', 'settings', 'rules', 'share', 'confirm',
+  var OVERLAYS = ['appearance', 'settings', 'rules', 'share', 'newgame',
     'merge', 'over'];
 
   /* the ones a tap outside or Escape closes, innermost first */
-  var LIGHT = ['share', 'rules', 'appearance', 'settings', 'confirm'];
+  var LIGHT = ['share', 'rules', 'appearance', 'settings', 'newgame'];
 
   function anyOverlayOpen() {
     for (var i = 0; i < OVERLAYS.length; i++) if (isOpen(OVERLAYS[i])) return true;
@@ -357,10 +386,51 @@ window.WarGame = window.WarGame || {};
 
   function gameOn() { return !!(G.state && G.state.winner === null); }
 
-  /* a game under way is only lost on purpose */
-  function askNewGame() {
-    if (gameOn()) openOv('confirm');
-    else newGame();
+  /* the choice the sheet is showing; it opens on the one remembered and
+     only reaches the settings when Start is pressed */
+  var NG = { opponent: 'human', level: 'medium' };
+
+  function segHTML(items, chosen) {
+    var out = '';
+    for (var i = 0; i < items.length; i++) {
+      var on = items[i].v === chosen;
+      out += '<button type="button" class="seg-btn' + (on ? ' is-on' : '') +
+        '" data-v="' + items[i].v + '" aria-pressed="' + (on ? 'true' : 'false') +
+        '">' + esc(items[i].label) + '</button>';
+    }
+    return out;
+  }
+
+  function renderNewGame() {
+    el.segOpponent.innerHTML = segHTML([
+      { v: 'human', label: t('opp.human') },
+      { v: 'computer', label: t('opp.computer') }
+    ], NG.opponent);
+    el.segOpponent.setAttribute('aria-label', t('game.opponent'));
+
+    el.segLevel.innerHTML = segHTML(LEVELS.map(function (id) {
+      return { v: id, label: t('level.' + id) };
+    }), NG.level);
+    el.segLevel.setAttribute('aria-label', t('game.level'));
+    el.segLevel.hidden = NG.opponent !== 'computer';
+
+    /* the sentence about the game that is lost belongs to a game still on */
+    el.ngWarn.hidden = !gameOn();
+  }
+
+  function openNewGame() {
+    NG.opponent = G.settings.opponent === 'computer' ? 'computer' : 'human';
+    NG.level = levelOf(G.settings.level);
+    renderNewGame();
+    openOv('newgame');
+  }
+
+  function startChosen() {
+    G.settings.opponent = NG.opponent;
+    G.settings.level = NG.level;
+    saveSettings();
+    closeOv('newgame');
+    newGame();
   }
 
   /* ------------------------------------------------------- the layout --- */
@@ -478,7 +548,7 @@ window.WarGame = window.WarGame || {};
     var pl = st.turn.player;
 
     el.turnSwatch.style.background = playerColor(pl);
-    el.turnName.textContent = t('player.' + pl);
+    el.turnName.textContent = playerName(pl);
     el.turnNumber.textContent = t('game.turn', { n: st.turn.number });
     document.documentElement.style.setProperty('--p-cur', playerColor(pl));
     document.documentElement.style.setProperty('--p-cur-outline', outlineFor(playerColor(pl)));
@@ -499,7 +569,7 @@ window.WarGame = window.WarGame || {};
 
     var canHeal = !!(G.sel && hasAct('heal'));
     el.btnHeal.hidden = !canHeal;
-    el.btnUndo.disabled = G.history.length === 0 || G.busy;
+    el.btnUndo.disabled = !canUndo();
     el.btnEndTurn.disabled = st.winner !== null || !!st.pendingMerge || G.busy;
   }
 
@@ -657,19 +727,28 @@ window.WarGame = window.WarGame || {};
 
   /* --------------------------------------------------------- actions ---- */
 
+  /* one action of the human; the computer's go through applyAction */
   function doAction(action) {
-    var st = G.state;
-    if (!st || G.busy) return;
-    var prev = st, res;
+    if (!G.state || G.busy) return;
+    if (G.mode === 'computer' && G.state.turn.player === COMPUTER) return;
+    applyAction(action, null);
+  }
+
+  /* applies one action, plays its events and answers whether it took.
+     opts.hold keeps the input blocked, because the computer's turn is not
+     over yet; opts.ai leaves the merge dialog and the fire hint alone,
+     since they belong to a human at the board */
+  function applyAction(action, opts) {
+    var prev = G.state, res, run = G.aiRun;
+    if (!prev) return Promise.resolve(false);
     try {
-      res = Engine.apply(st, action);
+      res = Engine.apply(prev, action);
     } catch (err) {
-      msg(t('msg.cannot'));
-      return;
+      if (!opts || !opts.ai) msg(t('msg.cannot'));
+      return Promise.resolve(false);
     }
 
-    if (action.type === 'endTurn') G.history = [];
-    else G.history.push(prev);
+    pushHistory(prev, action);
 
     G.state = res.state;
     G.sel = null;
@@ -678,33 +757,44 @@ window.WarGame = window.WarGame || {};
     G.busy = true;
     renderPanel();
 
-    playEvents(res.events || [], prev, res.state).then(function () {
-      G.busy = false;
+    return playEvents(res.events || [], prev, res.state).then(function () {
+      /* a new game may have come on the board while this played out: then
+         nothing of this action is left to say, and the new game rules */
+      if (run !== G.aiRun) return false;
+      G.busy = !!(opts && opts.hold);
       render();
       autosave();
-      afterAction(res.events || [], action);
+      afterAction(res.events || [], action, !!(opts && opts.ai));
+      if (!opts) maybeComputerTurn();
+      return true;
     });
   }
 
-  function afterAction(events, action) {
+  function afterAction(events, action, ai) {
     var st = G.state;
     var line = '';
     for (var i = 0; i < events.length; i++) {
       if (events[i].type === 'pass') {
-        line = t('msg.pass', { name: t('player.' + events[i].player) });
+        line = t('msg.pass', { name: playerName(events[i].player) });
       }
     }
     if (st.winner !== null) { msg(line); openOver(); return; }
-    if (st.pendingMerge) { msg(line); openMerge(); return; }
+    if (st.pendingMerge) {
+      if (line || !ai) msg(line);
+      if (!ai) openMerge();      /* the computer answers its own merges */
+      return;
+    }
 
     /* a firing piece that took a single step keeps its shot: it stays
        selected with its targets on, and the panel says so */
-    if (action && action.type === 'move' && Engine.canFireAgain(st, action.piece)) {
+    if (!ai && action && action.type === 'move' &&
+        Engine.canFireAgain(st, action.piece)) {
       select(action.piece);
       msg(t('msg.mayFire'));
       return;
     }
-    msg(line);
+    /* while the computer plays, the panel goes on saying so */
+    if (line || !ai) msg(line);
   }
 
   function endTurn() {
@@ -713,15 +803,130 @@ window.WarGame = window.WarGame || {};
     doAction({ type: 'endTurn' });
   }
 
+  /* ------------------------------------------------------- the history --
+     The state before each action. With two players the history is the
+     current turn alone and End turn clears it. Against the computer it
+     runs across the turns, and the entry that opens a human turn carries a
+     mark, so that Undo pressed before anything is done steps back over the
+     computer's turn to the start of the human turn before it.
+     --------------------------------------------------------------------- */
+
+  function humanTurnStart(st) {
+    return !!st && st.winner === null && st.turn.player === HUMAN &&
+      st.turn.used.length === 0 && !st.pendingMerge;
+  }
+
+  function pushHistory(prev, action) {
+    if (G.mode !== 'computer') {
+      if (action.type === 'endTurn') G.history = [];
+      else G.history.push({ state: prev, start: false });
+      return;
+    }
+    G.history.push({ state: prev, start: humanTurnStart(prev) });
+  }
+
+  function hasMark() {
+    for (var i = 0; i < G.history.length; i++) if (G.history[i].start) return true;
+    return false;
+  }
+
+  function canUndo() {
+    if (G.busy || !G.history.length) return false;
+    if (G.mode !== 'computer') return true;
+    /* at the start of a turn Undo gives back a whole pair of turns, so
+       there has to be a human turn on the way back to land in */
+    return humanTurnStart(G.state) ? hasMark() : true;
+  }
+
   function undo() {
-    if (G.busy || !G.history.length) return;
-    G.state = G.history.pop();
+    if (!canUndo()) return;
+    var e = G.history.pop();
+    if (G.mode === 'computer' && humanTurnStart(G.state)) {
+      while (!e.start && G.history.length) e = G.history.pop();
+    }
+    G.state = e.state;
     G.sel = null;
     G.acts = [];
     msg('');
     render();
     autosave();
     if (G.state.pendingMerge) openMerge(); else closeOv('merge');
+  }
+
+  /* =====================================================================
+     THE COMPUTER
+     Its whole turn comes from window.WarGame.AI.planTurn as engine actions,
+     and they are applied one at a time through the path a human's actions
+     take, so every move, attack, shot, heal and merge animates the same
+     way, with a pause between them. The board and the buttons stay blocked
+     from the first action to the last. If the plan fails at any point the
+     turn is simply ended, so the game never hangs.
+     ===================================================================== */
+
+  function computerToPlay() {
+    return G.mode === 'computer' && !!G.state && G.state.winner === null &&
+      G.state.turn.player === COMPUTER;
+  }
+
+  function maybeComputerTurn() {
+    if (computerToPlay()) computerTurn();
+  }
+
+  /* the pause between two actions of the computer, so the human can follow */
+  function aiPause() {
+    var ms = animOn() ? 400 : 250;
+    return new Promise(function (r) { setTimeout(r, ms); });
+  }
+
+  function planTurn() {
+    var AI = window.WarGame.AI;
+    if (!AI || typeof AI.planTurn !== 'function') return null;
+    try { return AI.planTurn(G.state, G.level, {}); }
+    catch (e) { return null; }
+  }
+
+  async function computerTurn() {
+    var run = ++G.aiRun;
+    var turnNo = G.state.turn.number;
+    G.busy = true;
+    G.sel = null;
+    G.acts = [];
+    clearMarks();
+    msg(t('msg.thinking'));
+    renderPanel();
+
+    /* a breath, so the message is on the screen before the planning */
+    await new Promise(function (r) { setTimeout(r, 80); });
+    if (run !== G.aiRun) return;
+
+    var plan = planTurn();
+    if (!plan || !plan.length) plan = [{ type: 'endTurn' }];
+
+    for (var i = 0; i < plan.length; i++) {
+      if (!computerToPlay() || G.state.turn.number !== turnNo) break;
+      var ok = await applyAction(plan[i], { hold: true, ai: true });
+      if (run !== G.aiRun) return;
+      if (!ok) break;            /* an action the board no longer allows */
+      if (computerToPlay() && G.state.turn.number === turnNo) await aiPause();
+      if (run !== G.aiRun) return;
+    }
+
+    /* however the plan ended, the turn is handed back here */
+    if (computerToPlay() && G.state.pendingMerge) {
+      await applyAction({ type: 'skipMerge', piece: G.state.pendingMerge },
+        { hold: true, ai: true });
+      if (run !== G.aiRun) return;
+    }
+    if (computerToPlay() && G.state.turn.number === turnNo) {
+      await applyAction({ type: 'endTurn' }, { hold: true, ai: true });
+      if (run !== G.aiRun) return;
+    }
+
+    G.busy = false;
+    if (el.panelMsg.textContent === t('msg.thinking')) msg('');
+    render();
+    /* the human may have had no move at all: then it is the computer again */
+    maybeComputerTurn();
   }
 
   function render() {
@@ -1030,7 +1235,7 @@ window.WarGame = window.WarGame || {};
   async function animRibbon(player) {
     if (!animOn()) return;
     var color = playerColor(player);
-    el.ribbon.firstChild.textContent = t('player.' + player);
+    el.ribbon.firstChild.textContent = playerName(player);
     el.ribbon.style.background = color;
     el.ribbon.style.color = outlineFor(color);
     el.ribbon.classList.remove('is-on');
@@ -1120,7 +1325,7 @@ window.WarGame = window.WarGame || {};
     } else {
       el.overSwatch.style.display = '';
       el.overSwatch.style.background = playerColor(w);
-      el.overTitle.textContent = t('over.win', { name: t('player.' + w) });
+      el.overTitle.textContent = t('over.win', { name: playerName(w) });
     }
   }
 
@@ -1131,10 +1336,18 @@ window.WarGame = window.WarGame || {};
 
   /* ----------------------------------------------------- persistence ---- */
 
+  /* the game is the serialized state; the mode it is played in sits beside
+     it, so a reload against the computer resumes against the computer */
   function autosave() {
     try {
-      if (!G.state || G.state.winner !== null) localStorage.removeItem(GAME_KEY);
-      else localStorage.setItem(GAME_KEY, Engine.serialize(G.state));
+      if (!G.state || G.state.winner !== null) {
+        localStorage.removeItem(GAME_KEY);
+        localStorage.removeItem(MODE_KEY);
+      } else {
+        localStorage.setItem(GAME_KEY, Engine.serialize(G.state));
+        localStorage.setItem(MODE_KEY,
+          JSON.stringify({ opponent: G.mode, level: G.level }));
+      }
     } catch (e) { /* no storage */ }
   }
 
@@ -1142,7 +1355,19 @@ window.WarGame = window.WarGame || {};
     try { return localStorage.getItem(GAME_KEY); } catch (e) { return null; }
   }
 
+  /* the saved mode, or null: anything but a computer game is two players */
+  function savedMode() {
+    try {
+      var raw = localStorage.getItem(MODE_KEY);
+      if (!raw) return null;
+      var m = JSON.parse(raw);
+      if (!m || m.opponent !== 'computer') return null;
+      return { opponent: 'computer', level: levelOf(m.level) };
+    } catch (e) { return null; }
+  }
+
   function resetBoardNodes() {
+    G.aiRun += 1;          /* a plan still running belongs to the old game */
     G.history = [];
     G.sel = null;
     G.acts = [];
@@ -1158,7 +1383,7 @@ window.WarGame = window.WarGame || {};
     resetBoardNodes();
     closeOv('merge');
     closeOv('over');
-    closeOv('confirm');
+    closeOv('newgame');
     msg('');
     render();
     remeasure();
@@ -1168,23 +1393,32 @@ window.WarGame = window.WarGame || {};
   }
 
   function newGame() {
+    setMode(G.settings.opponent, G.settings.level);
     var st = Engine.newGame({ diagonalMoves: !!G.settings.diagonalMoves });
     startGame(st);
-    msg(t('msg.start', { name: t('player.' + st.turn.player) }));
+    msg(t('msg.start', { name: playerName(st.turn.player) }));
     G.busy = true;
+    renderPanel(); /* the buttons show as blocked while the ribbon plays */
     animRibbon(st.turn.player).then(function () {
       G.busy = false;
       renderMarks();
       renderPanel();
+      /* the draw may have given the computer the first turn */
+      maybeComputerTurn();
     });
   }
 
   /* a WG1. code no longer deserializes, so an old save is no save */
   function resumeSaved() {
-    var c = savedCode();
+    var c = savedCode(), st;
     if (!c) return false;
-    try { startGame(Engine.deserialize(c)); return true; }
+    try { st = Engine.deserialize(c); }
     catch (e) { return false; }
+    var m = savedMode();
+    setMode(m ? 'computer' : 'human', m ? m.level : null);
+    startGame(st);
+    maybeComputerTurn();
+    return true;
   }
 
   /* a code may arrive as a bare string or inside a #g=... link */
@@ -1200,6 +1434,7 @@ window.WarGame = window.WarGame || {};
     if (h.indexOf('#g=') !== 0) return false;
     try {
       var st = Engine.deserialize(cleanCode(h));
+      setMode('human');        /* a shared position is a game for two */
       startGame(st);
       return true;
     } catch (e) { return false; }
@@ -1320,6 +1555,7 @@ window.WarGame = window.WarGame || {};
     el.importCode.value = '';
     shareMsg(t('share.loaded'));
     closeOv('share');
+    setMode('human');          /* a pasted position is a game for two */
     startGame(st);
   }
 
@@ -1558,6 +1794,10 @@ window.WarGame = window.WarGame || {};
     el.exportCode = $('export-code');
     el.importCode = $('import-code');
 
+    el.segOpponent = $('seg-opponent');
+    el.segLevel = $('seg-level');
+    el.ngWarn = $('ng-warn');
+
     el.mergePiece = $('merge-piece');
     el.mergeChoices = $('merge-choices');
     el.overSwatch = $('over-swatch');
@@ -1573,18 +1813,27 @@ window.WarGame = window.WarGame || {};
     });
 
     /* --- the icon bar --- */
-    $('btn-newgame').addEventListener('click', askNewGame);
+    $('btn-newgame').addEventListener('click', openNewGame);
     $('btn-appearance').addEventListener('click', openAppearance);
     $('btn-settings').addEventListener('click', openSettings);
     $('btn-rules').addEventListener('click', openRules);
     $('btn-share').addEventListener('click', openShare);
 
-    /* --- the new game question --- */
-    $('btn-new-yes').addEventListener('click', function () {
-      closeOv('confirm');
-      newGame();
+    /* --- the new game sheet --- */
+    $('btn-new-yes').addEventListener('click', startChosen);
+    $('btn-new-no').addEventListener('click', function () { closeOv('newgame'); });
+    el.segOpponent.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('.seg-btn') : null;
+      if (!b) return;
+      NG.opponent = b.dataset.v;
+      renderNewGame();
     });
-    $('btn-new-no').addEventListener('click', function () { closeOv('confirm'); });
+    el.segLevel.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('.seg-btn') : null;
+      if (!b) return;
+      NG.level = b.dataset.v;
+      renderNewGame();
+    });
 
     /* --- closing --- */
     var closers = document.querySelectorAll('[data-close]');
@@ -1747,6 +1996,7 @@ window.WarGame = window.WarGame || {};
     setLang: setLang,
     importCode: function (code) {
       var st = Engine.deserialize(cleanCode(code));
+      setMode('human');
       startGame(st);
       return true;
     },

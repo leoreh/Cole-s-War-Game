@@ -275,12 +275,16 @@
     </section>
   </div>
 
-  <!-- ========================================= the new game question -->
-  <div id="ov-confirm" class="overlay" hidden>
-    <div class="dialog dialog--ask" role="dialog" aria-modal="true">
-      <p data-i18n="game.confirmNew"></p>
+  <!-- ============================================ the new game sheet -->
+  <div id="ov-newgame" class="overlay" hidden>
+    <div class="dialog dialog--ask" role="dialog" aria-modal="true" aria-labelledby="ng-title">
+      <h2 id="ng-title" data-i18n="game.newGame"></h2>
+      <!-- the two controls are drawn by ui.js, so they follow the language -->
+      <div class="seg" id="seg-opponent" role="group"></div>
+      <div class="seg" id="seg-level" role="group" hidden></div>
+      <p id="ng-warn" data-i18n="game.confirmNew" hidden></p>
       <div class="row row--center">
-        <button type="button" id="btn-new-yes" class="btn btn--primary" data-i18n="game.confirmStart"></button>
+        <button type="button" id="btn-new-yes" class="btn btn--primary" data-i18n="game.start"></button>
         <button type="button" id="btn-new-no" class="btn" data-i18n="common.back"></button>
       </div>
     </div>
@@ -312,6 +316,7 @@
 <script src="themes.js"></script>
 <script src="icons.js"></script>
 <script src="engine.js"></script>
+<script src="ai.js"></script>
 <script src="ui.js"></script>
 </body>
 </html>

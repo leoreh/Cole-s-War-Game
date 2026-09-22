@@ -23,10 +23,21 @@ window.WarGame = window.WarGame || {};
     'game.appearance': 'מראה',
     'game.share': 'שיתוף',
     'game.confirmNew': 'המשחק הנוכחי יאבד.',
-    'game.confirmStart': 'להתחיל בכל זאת',
+    'game.start': 'התחלה',
+    'game.opponent': 'יריב',
+    'game.level': 'רמה',
+
+    'opp.human': 'שני שחקנים',
+    'opp.computer': 'מול המחשב',
+    'level.easy': 'קל',
+    'level.medium': 'בינוני',
+    'level.hard': 'קשה',
 
     'player.0': 'שחקן 1',
     'player.1': 'שחקן 2',
+    /* מול המחשב האדם הוא תמיד שחקן 0; השמות האלה נייטרליים מבחינת מין */
+    'player.you': 'הצד שלך',
+    'player.computer': 'המחשב',
 
     'kind.S': 'חייל',
     'kind.K': 'אביר',
@@ -54,9 +65,10 @@ window.WarGame = window.WarGame || {};
     'msg.used': 'הכלי כבר פעל בתור הזה',
     'msg.comboFull': 'אין מקום לעוד {kind} בתור הזה',
     'msg.cannot': 'הכלי לא יכול לפעול עכשיו',
-    'msg.pass': 'ל{name} אין מהלך אפשרי, התור עובר',
+    'msg.pass': '{name}: אין מהלך אפשרי, התור עובר',
     'msg.pending': 'צריך להשלים את המיזוג',
     'msg.mayFire': 'הכלי יכול עדיין לירות',
+    'msg.thinking': 'המחשב חושב…',
 
     'merge.title': 'מיזוג',
     'merge.text': 'הכלי הגיע לשורה האחרונה ואפשר למזג אותו עם סוג נוסף.',
@@ -183,10 +195,21 @@ window.WarGame = window.WarGame || {};
     'game.appearance': 'Appearance',
     'game.share': 'Share',
     'game.confirmNew': 'The current game will be lost.',
-    'game.confirmStart': 'Start anyway',
+    'game.start': 'Start',
+    'game.opponent': 'Opponent',
+    'game.level': 'Level',
+
+    'opp.human': 'Two players',
+    'opp.computer': 'Computer',
+    'level.easy': 'Easy',
+    'level.medium': 'Medium',
+    'level.hard': 'Hard',
 
     'player.0': 'Player 1',
     'player.1': 'Player 2',
+    /* against the computer the human is always player 0 */
+    'player.you': 'You',
+    'player.computer': 'Computer',
 
     'kind.S': 'Soldier',
     'kind.K': 'Knight',
@@ -210,13 +233,14 @@ window.WarGame = window.WarGame || {};
     'panel.available': 'Available',
     'panel.nothing': 'none',
 
-    'msg.start': '{name} starts',
+    'msg.start': 'First turn: {name}',
     'msg.used': 'That piece has already acted this turn',
     'msg.comboFull': 'No room for another {kind} this turn',
     'msg.cannot': 'That piece cannot act now',
-    'msg.pass': '{name} has no legal action, the turn passes',
+    'msg.pass': '{name}: no legal action, the turn passes',
     'msg.pending': 'Finish the merge first',
     'msg.mayFire': 'The piece may still fire',
+    'msg.thinking': 'The computer is thinking…',
 
     'merge.title': 'Merge',
     'merge.text': 'The piece reached the far row. You may merge it with another kind.',

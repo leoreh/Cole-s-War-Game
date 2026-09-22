@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 1rem; }
+  pre { font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
+  p { font-size: 13px; color: #555; }
+</style>
+</head>
+<body>
+<h1>War Game arena</h1>
+<p>Query: <code>?games=8&amp;pairs=easy:medium,medium:hard,easy:hard&amp;cap=150&amp;budget=800&amp;seed=12345</code>.
+   One game at a time, so the page keeps drawing. The title ends as DONE.</p>
+<pre id="out">starting</pre>
+
+<script src="../src/engine.js"></script>
+<script src="../src/ai.js"></script>
+<script src="arena.js"></script>
+<script>
+(function () {
+  'use strict';
+  var A = window.WarGame.Arena;
+  var out = document.getElementById('out');
+  var q = new URLSearchParams(location.search);
+
+  var games = parseInt(q.get('games') || '8', 10);
+  var pairs = (q.get('pairs') || 'easy:medium,medium:hard,easy:hard').split(',');
+  var opts = {
+    cap: parseInt(q.get('cap') || '150', 10),
+    seed: parseInt(q.get('seed') || '12345', 10),
+    budgetMs: q.get('budget') === null ? undefined : parseInt(q.get('budget'), 10),
+    maxNodes: q.get('nodes') === null ? undefined : parseInt(q.get('nodes'), 10)
+  };
+
+  var done = [], run = null, at = 0;
+
+  function draw(note) {
+    var lines = [A.header()];
+    done.forEach(function (r) { lines.push(A.line(r)); });
+    if (run) lines.push(A.line(run.result) + '  (' + run.result.played + '/' + games + ')');
+    lines.push('');
+    lines.push(note);
+    if (done.length) {
+      done.forEach(function (r) {
+        r.errors.slice(0, 3).forEach(function (e) { lines.push('   ' + r.a + '/' + r.b + ' ' + e); });
+      });
+    }
+    out.textContent = lines.join('\n');
+  }
+
+  function tick() {
+    if (!run) {
+      if (at >= pairs.length) {
+        draw('done: ' + games + ' games a pairing, cap ' + opts.cap +
+          ' turns, budget ' + (opts.budgetMs === undefined ? 'default' : opts.budgetMs + ' ms'));
+        document.title = 'DONE';
+        return;
+      }
+      var ab = pairs[at].split(':');
+      run = A.makeRun(ab[0], ab[1], games, opts);
+      at += 1;
+    }
+    run.next();
+    if (run.done()) { done.push(run.result); run = null; }
+    draw('running');
+    setTimeout(tick, 0);
+  }
+
+  document.title = 'running';
+  draw('running');
+  setTimeout(tick, 0);
+})();
+</script>
+</body>
+</html>

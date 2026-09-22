@@ -8,6 +8,8 @@ A game in progress moves between devices from the same share icon: Share this ga
 
 The game autosaves after every action, so opening it again continues the last game on the same device.
 
+The New game icon also offers a game against the computer, at three levels, easy, medium and hard; the choice between two players and the computer is remembered for the next game.
+
 # PC
 
 The same link works in Chrome or Edge. Without internet, `WarGame.html` from this repository opens the whole game from a double click.

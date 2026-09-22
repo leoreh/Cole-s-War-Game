@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>running</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 1rem; }
+  pre { font-size: 13px; line-height: 1.45; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>War Game computer opponent tests</h1>
+<pre id="out"></pre>
+
+<script src="../src/engine.js"></script>
+<script src="../src/ai.js"></script>
+<script>
+(function () {
+  'use strict';
+  var E = window.WarGame.Engine;
+  var AI = window.WarGame.AI;
+  var lines = [], failures = 0, count = 0;
+
+  /* ---------- tiny harness ---------- */
+
+  function test(name, fn) {
+    count += 1;
+    try {
+      fn();
+      lines.push('PASS  ' + name);
+    } catch (e) {
+      failures += 1;
+      lines.push('FAIL  ' + name + ': ' + (e && e.message ? e.message : e));
+    }
+  }
+
+  function assert(cond, msg) {
+    if (!cond) throw new Error(msg || 'expected true');
+  }
+
+  function assertEqual(actual, expected, msg) {
+    if (actual !== expected) {
+      throw new Error((msg ? msg + ': ' : '') + 'got ' + actual + ', expected ' + expected);
+    }
+  }
+
+  /* ---------- building positions (as in engine.test.html) ---------- */
+
+  function position(specs, opts) {
+    opts = opts || {};
+    var st = {
+      rules: { diagonalMoves: true },
+      pieces: {},
+      turn: {
+        player: opts.player === undefined ? 0 : opts.player,
+        number: opts.number === undefined ? 1 : opts.number,
+        used: opts.used ? JSON.parse(JSON.stringify(opts.used)) : []
+      },
+      pendingMerge: opts.pendingMerge === undefined ? null : opts.pendingMerge,
+      winner: opts.winner === undefined ? null : opts.winner,
+      firstPlayer: 0
+    };
+    if (opts.rules) Object.keys(opts.rules).forEach(function (k) { st.rules[k] = opts.rules[k]; });
+    specs.forEach(function (sp, i) {
+      var kinds = sp.kinds || [sp.kind];
+      var baseHp = 0;
+      kinds.forEach(function (k) { baseHp += E.KINDS[k].hp; });
+      var id = sp.id || ('p' + sp.owner + '-' + i);
+      st.pieces[id] = {
+        id: id, owner: sp.owner, kinds: kinds.slice(),
+        hp: sp.hp === undefined ? baseHp : sp.hp,
+        maxHp: sp.maxHp === undefined ? baseHp : sp.maxHp,
+        row: sp.row, col: sp.col
+      };
+    });
+    return st;
+  }
+
+  // mulberry32, so that every run of this page plans the same turns
+  function rngFrom(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function opts(seed, nodes) {
+    return { random: rngFrom(seed === undefined ? 7 : seed), maxNodes: nodes === undefined ? 4000 : nodes };
+  }
+
+  function types(plan) {
+    return plan.map(function (a) { return a.type; }).join(',');
+  }
+
+  /* Applies a whole plan. Engine.apply throws on an illegal action, so this
+     returning at all is the proof that the plan was legal in order. */
+  function run(state, plan, name) {
+    var s = state, i;
+    for (i = 0; i < plan.length; i++) {
+      if (plan[i].type === 'heal') {
+        var p = s.pieces[plan[i].piece];
+        assert(p && p.hp < p.maxHp, (name || '') + ' healed a piece at full health');
+      }
+      assert(i === 0 || plan[i - 1].type !== 'endTurn', (name || '') + ' acts after endTurn');
+      s = E.apply(s, plan[i]).state;
+    }
+    return s;
+  }
+
+  // Every level plans a legal turn that ends the turn, unless it wins first.
+  function checkTurn(state, level, o, name) {
+    var plan = AI.planTurn(state, level, o || opts());
+    assert(plan.length > 0, (name || level) + ' planned nothing');
+    var s = run(state, plan, name || level);
+    if (s.winner === null) {
+      assertEqual(plan[plan.length - 1].type, 'endTurn', (name || level) + ' did not end the turn');
+    } else {
+      assert(plan[plan.length - 1].type !== 'endTurn', (name || level) + ' ended a won turn');
+    }
+    return { plan: plan, state: s };
+  }
+
+  /* A batch of mid-game positions: easy playing itself, cut at a random action,
+     so some of them sit in the middle of a turn and some on a pending merge. */
+  function sampleStates(n) {
+    var rnd = rngFrom(99), out = [], s = E.newGame({ diagonalMoves: true }, 0), guard = 0;
+    while (out.length < n && guard++ < 400) {
+      if (s.winner !== null) s = E.newGame({ diagonalMoves: true }, 0);
+      var plan = AI.planTurn(s, 'easy', { random: rnd });
+      var cut = 1 + Math.floor(rnd() * plan.length), i;
+      for (i = 0; i < cut; i++) s = E.apply(s, plan[i]).state;
+      if (s.winner === null) out.push(s);
+      for (i = cut; i < plan.length && s.winner === null; i++) s = E.apply(s, plan[i]).state;
+    }
+    return out;
+  }
+
+  /* ---------- the contract ---------- */
+
+  test('LEVELS are easy, medium and hard', function () {
+    assertEqual(AI.LEVELS.join(','), 'easy,medium,hard');
+  });
+
+  test('every level plans a legal turn from the opening position', function () {
+    var start = E.newGame({ diagonalMoves: true }, 0);
+    AI.LEVELS.forEach(function (level) {
+      var r = checkTurn(start, level);
+      assertEqual(r.plan[r.plan.length - 1].type, 'endTurn', level);
+      assert(r.state.turn.player === 1, level + ' left the turn with player 0');
+    });
+  });
+
+  test('every level plans a legal turn from twenty mid-game positions', function () {
+    var states = sampleStates(20);
+    assertEqual(states.length, 20, 'sampled positions');
+    states.forEach(function (st, i) {
+      AI.LEVELS.forEach(function (level) {
+        checkTurn(st, level, opts(i + 1), level + ' on position ' + i);
+      });
+    });
+  });
+
+  test('a seeded random makes every level repeat itself', function () {
+    var states = [E.newGame({ diagonalMoves: true }, 1)].concat(sampleStates(3));
+    states.forEach(function (st, i) {
+      AI.LEVELS.forEach(function (level) {
+        var a = AI.planTurn(st, level, opts(5));
+        var b = AI.planTurn(st, level, opts(5));
+        assertEqual(JSON.stringify(a), JSON.stringify(b), level + ' on position ' + i);
+      });
+    });
+  });
+
+  test('an unknown level plays as medium', function () {
+    var st = sampleStates(1)[0];
+    var a = AI.planTurn(st, 'grandmaster', opts(3));
+    var b = AI.planTurn(st, 'medium', opts(3));
+    assertEqual(JSON.stringify(a), JSON.stringify(b));
+  });
+
+  test('planning does not change the position it is given', function () {
+    var st = E.newGame({ diagonalMoves: true }, 0);
+    var before = JSON.stringify(st);
+    AI.LEVELS.forEach(function (level) { AI.planTurn(st, level, opts()); });
+    assertEqual(JSON.stringify(st), before);
+  });
+
+  /* ---------- what the levels do ---------- */
+
+  test('medium takes a free kill', function () {
+    // the archer shoots two squares down the row; the soldier dies and nothing
+    // can shoot back
+    var st = position([
+      { id: 'a', owner: 0, kind: 'A', row: 3, col: 3 },
+      { id: 's', owner: 0, kind: 'S', row: 0, col: 0 },
+      { id: 'e', owner: 1, kind: 'S', row: 3, col: 5 },
+      { id: 'k', owner: 1, kind: 'K', row: 7, col: 7 }
+    ]);
+    var r = checkTurn(st, 'medium');
+    assert(!r.state.pieces.e, 'the soldier survived: ' + types(r.plan));
+    assert(r.state.pieces.a, 'the archer did not');
+  });
+
+  /* The position an outside tester found: the computer's archer can shoot the
+     human soldier dead from where it stands, and the shot costs it nothing. An
+     evaluation that pays for standing near the enemy, or for holding a threat,
+     makes that kill look like a loss. */
+  function freeShotPosition() {
+    return position([
+      { id: 'p1-12', owner: 1, kind: 'A', row: 3, col: 3 },
+      { id: 'p0-0', owner: 0, kind: 'S', row: 3, col: 5 },
+      { id: 'p0-8', owner: 0, kind: 'K', row: 7, col: 0 },
+      { id: 'p1-8', owner: 1, kind: 'K', row: 0, col: 7 }
+    ], { player: 1 });
+  }
+
+  test('medium and hard take a free shot', function () {
+    var st = freeShotPosition();
+    assert(E.legalActions(st, 'p1-12').some(function (a) {
+      return a.type === 'fire' && a.target === 'p0-0';
+    }), 'the shot should be legal to begin with');
+    ['medium', 'hard'].forEach(function (level) {
+      var r = checkTurn(st, level);
+      assert(r.plan.some(function (a) { return a.type === 'fire' && a.target === 'p0-0'; }),
+        level + ' did not fire: ' + types(r.plan));
+      assert(!r.state.pieces['p0-0'], level + ' left the soldier alive');
+    });
+  });
+
+  test('medium and hard take the same shot in the middle of the turn', function () {
+    // the archer has taken its one step, so its kept shot is all that is left
+    var st = freeShotPosition();
+    st = E.apply(st, { type: 'move', piece: 'p1-12', to: { row: 3, col: 4 } }).state;
+    st = E.apply(st, { type: 'move', piece: 'p1-8', to: { row: 0, col: 5 } }).state;
+    if (st.pendingMerge) st = E.apply(st, { type: 'merge', piece: st.pendingMerge, kind: 'K' }).state;
+    assertEqual(E.canFireAgain(st, 'p1-12'), true, 'the kept shot should still be there');
+    ['medium', 'hard'].forEach(function (level) {
+      var r = checkTurn(st, level);
+      assertEqual(types(r.plan), 'fire,endTurn', level + ': ' + types(r.plan));
+      assert(!r.state.pieces['p0-0'], level + ' left the soldier alive');
+    });
+  });
+
+  /* The rule behind those two: nothing the evaluation counts besides material
+     may be worth as much as the smallest piece on the board, so taking a piece
+     for nothing always reads as a gain. A shot costs the shooter nothing, which
+     makes it the clean case to check. */
+  test('a killing shot always raises the evaluation', function () {
+    var checked = 0;
+    sampleStates(80).forEach(function (st) {
+      if (st.pendingMerge !== null) return;
+      var mover = st.turn.player, before = AI.evaluate(st, mover);
+      E.piecesOf(st, mover).forEach(function (p) {
+        E.legalActions(st, p.id).forEach(function (a) {
+          if (a.type !== 'fire') return;
+          var shot = { type: 'fire', piece: p.id, target: a.target };
+          var next = E.apply(st, shot).state;
+          if (next.pieces[a.target]) return;           // the target lived: not a kill
+          checked += 1;
+          var after = AI.evaluate(next, mover);
+          assert(after > before, 'killing ' + a.target + ' cost ' + (before - after).toFixed(3));
+        });
+      });
+    });
+    assert(checked >= 10, 'only ' + checked + ' killing shots to check');
+  });
+
+  test('hard does not hand a knight over for a soldier', function () {
+    /* Taking the soldier on (4,6) puts the knight on that square at health 2,
+       where the enemy knight on (7,6) reaches it and kills it. Standing still
+       or walking away keeps it. */
+    var st = position([
+      { id: 'k0', owner: 0, kind: 'K', row: 4, col: 4 },
+      { id: 's0', owner: 0, kind: 'S', row: 0, col: 0 },
+      { id: 'e1', owner: 1, kind: 'S', row: 4, col: 6 },
+      { id: 'k1', owner: 1, kind: 'K', row: 7, col: 6 }
+    ]);
+    var free = E.legalActions(st, 'k0').filter(function (a) { return a.type === 'attack'; });
+    assertEqual(free.length, 1, 'the bait should be takeable');
+
+    var r = checkTurn(st, 'hard');
+    var k0 = r.state.pieces.k0;
+    assert(k0, 'hard lost the knight inside its own turn');
+    assert(!(k0.row === 4 && k0.col === 6), 'hard took the bait: ' + types(r.plan));
+  });
+
+  test('a mid-turn position is continued legally', function () {
+    // a knight and a soldier have acted, so K+S is full and only heals are left
+    var st = position([
+      { id: 'x', owner: 0, kind: 'K', row: 0, col: 2 },
+      { id: 'y', owner: 0, kind: 'S', row: 0, col: 3 },
+      { id: 'h', owner: 0, kind: 'A', hp: 1, row: 0, col: 4 },
+      { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
+    ], { used: [{ id: 'x', kind: 'K', fireLeft: false }, { id: 'y', kind: 'S', fireLeft: false }] });
+    AI.LEVELS.forEach(function (level) {
+      var r = checkTurn(st, level);
+      assertEqual(types(r.plan), 'heal,endTurn', level);
+      assertEqual(r.state.pieces.h.hp, 1.5, level);
+    });
+  });
+
+  test('a mid-turn position with a slot left is continued legally', function () {
+    var st = position([
+      { id: 'x', owner: 0, kind: 'S', row: 2, col: 2 },
+      { id: 'y', owner: 0, kind: 'S', row: 2, col: 3 },
+      { id: 'z', owner: 0, kind: 'K', row: 2, col: 4 },
+      { id: 'e', owner: 1, kind: 'S', row: 5, col: 3 },
+      { id: 'f', owner: 1, kind: 'A', row: 6, col: 3 }
+    ], { used: [{ id: 'x', kind: 'S', fireLeft: false }] });
+    AI.LEVELS.forEach(function (level) {
+      var r = checkTurn(st, level);
+      // the soldier that has already acted takes no second action, and the
+      // engine would throw on any kind that no longer fits the combination
+      r.plan.forEach(function (a) {
+        assert(a.piece !== 'x', level + ' used a spent piece twice');
+      });
+      assert(r.plan.length > 1, level + ' found nothing to do with a slot left');
+    });
+  });
+
+  test('a player with no action at all just ends the turn', function () {
+    var st = position([
+      { id: 's', owner: 0, kind: 'S', row: 0, col: 0 },
+      { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
+    ], { used: [{ id: 's', kind: 'S', fireLeft: false }] });
+    assertEqual(E.hasAnyAction(st), false, 'the position should be stuck');
+    AI.LEVELS.forEach(function (level) {
+      var r = checkTurn(st, level);
+      assertEqual(types(r.plan), 'endTurn', level);
+    });
+  });
+
+  test('a winning turn stops without endTurn', function () {
+    var st = position([
+      { id: 'a', owner: 0, kind: 'A', row: 3, col: 3 },
+      { id: 'e', owner: 1, kind: 'S', row: 3, col: 5 }
+    ]);
+    ['medium', 'hard'].forEach(function (level) {
+      var r = checkTurn(st, level);
+      assertEqual(r.state.winner, 0, level);
+      assertEqual(r.plan[r.plan.length - 1].type, 'fire', level);
+    });
+  });
+
+  test('a pending merge is answered first', function () {
+    var st = position([
+      { id: 'p', owner: 0, kind: 'S', row: 7, col: 3 },
+      { id: 'q', owner: 0, kind: 'S', row: 1, col: 1 },
+      { id: 'e', owner: 1, kind: 'K', row: 0, col: 7 }
+    ], { pendingMerge: 'p' });
+    AI.LEVELS.forEach(function (level) {
+      var r = checkTurn(st, level);
+      assert(r.plan[0].type === 'merge' || r.plan[0].type === 'skipMerge', level + ': ' + types(r.plan));
+      assertEqual(r.state.pendingMerge, null, level);
+    });
+  });
+
+  test('every hurt piece that did not act heals', function () {
+    var st = position([
+      { id: 'a', owner: 0, kind: 'A', hp: 1, row: 0, col: 0 },
+      { id: 'b', owner: 0, kind: 'A', hp: 2, row: 0, col: 1 },
+      { id: 'c', owner: 0, kind: 'K', hp: 3, row: 0, col: 2 },
+      { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
+    ]);
+    var r = checkTurn(st, 'medium');
+    var healed = r.plan.filter(function (x) { return x.type === 'heal'; }).length;
+    var acted = r.plan.filter(function (x) { return x.type !== 'heal' && x.type !== 'endTurn'; }).length;
+    assertEqual(healed + acted >= 2, true, 'hurt archers left alone: ' + types(r.plan));
+    assertEqual(r.state.pieces.c.hp, 3, 'a piece at full health healed');
+  });
+
+  test('every level plans a legal turn without diagonal moves', function () {
+    var start = E.newGame({ diagonalMoves: false }, 1);
+    AI.LEVELS.forEach(function (level) {
+      var r = checkTurn(start, level, opts(4), level + ' without diagonals');
+      assertEqual(r.plan[r.plan.length - 1].type, 'endTurn', level);
+    });
+  });
+
+  test('a tiny node cap still yields a legal turn', function () {
+    var start = E.newGame({ diagonalMoves: true }, 0);
+    [1, 5, 50].forEach(function (n) {
+      var r = checkTurn(start, 'hard', { random: rngFrom(2), maxNodes: n }, 'hard with ' + n + ' nodes');
+      assertEqual(r.plan[r.plan.length - 1].type, 'endTurn');
+    });
+  });
+
+  test('a time budget is respected', function () {
+    var start = E.newGame({ diagonalMoves: true }, 0);
+    var t0 = Date.now();
+    AI.planTurn(start, 'hard', { budgetMs: 50 });
+    var spent = Date.now() - t0;
+    assert(spent < 400, 'a 50 ms budget took ' + spent + ' ms');
+  });
+
+  /* ---------- report ---------- */
+
+  lines.push('');
+  lines.push(count + ' tests, ' + failures + ' failures');
+  document.getElementById('out').textContent = lines.join('\n');
+  document.title = failures === 0 ? 'PASS' : ('FAIL ' + failures);
+})();
+</script>
+</body>
+</html>

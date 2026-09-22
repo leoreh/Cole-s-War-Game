@@ -8,16 +8,19 @@ Version 2 (2026-09-22, second and third rounds; version 1 is kept as `spec.v1.md
 
 Everything lives in `D:\Code\Cole's War Game\`, a git repository of its own with nothing left in the vault, pushed to `https://github.com/leoreh/Cole-s-War-Game`, served by GitHub Pages from the `docs` folder at `https://leoreh.github.io/Cole-s-War-Game/`.
 
-- `src/index.html`: the shell. Classic `<script src>` tags in this order: `i18n.js`, `themes.js`, `icons.js`, `engine.js`, `ui.js`. No ES modules, so the file works from `file://`.
+- `src/index.html`: the shell. Classic `<script src>` tags in this order: `i18n.js`, `themes.js`, `icons.js`, `engine.js`, `ai.js`, `ui.js`. No ES modules, so the file works from `file://`.
 - `src/style.css`: all styling, including the per-theme board decoration.
 - `src/i18n.js`: `window.WarGame.I18N`. All user-visible strings in `he` and `en`, and `t(key, vars)`.
 - `src/themes.js`: `window.WarGame.Themes`. The piece glyph sets and palettes of each theme.
 - `src/icons.js`: `window.WarGame.Icons`. Composes a piece (glyph from the theme, hybrid sub-glyph, badges); keeps the classic glyphs as the fallback.
 - `src/engine.js`: `window.WarGame.Engine`. Pure rules, no DOM, no globals besides that object.
+- `src/ai.js`: `window.WarGame.AI`. The computer opponent: `planTurn(state, level, opts)` (see Computer opponent).
 - `src/ui.js`: `window.WarGame.UI`. Rendering, input, animation, settings, persistence, invite, service worker registration.
 - `src/sw.js`: the service worker (see Offline).
 - `src/manifest.webmanifest`: the web app manifest (see Install).
 - `tests/engine.test.html`: loads `../src/engine.js`, runs the assertions below, prints the results into `<pre id="out">` and sets `document.title` to `PASS` or `FAIL n`.
+- `tests/ai.test.html`: loads the engine and `../src/ai.js`, checks every level's plans (see Computer opponent), same output convention.
+- `dev/arena.js` and `dev/arena.html`: self-play of one level against another, in node or in the browser, reporting wins, draws and planning time.
 - `dev/themes.html`: a harness that shows every theme's pieces at 40, 64 and 90 px on light, dark, night and colorful squares, both owners, and a hybrid.
 - `dev/make_icons.py`: draws the app icons with Pillow into `docs/icons/` (see Install).
 - `build.py`: builds `docs/index.html` (everything inlined), `docs/sw.js` (versioned), copies `docs/manifest.webmanifest`, and also writes `WarGame.html` at the folder root as the offline single file. Run with `python build.py`. Idempotent.
@@ -162,6 +165,79 @@ deserialize(string) -> state   throws on a bad string, including a 'WG1.' code
 - Merge: a soldier reaching row 7 gets `pendingMerge`; `endTurn` throws while pending; S merged with K gives hp 4, maxHp 4, baseStr 4, move 4; S merged with A gives fire 2 range 2, maxHp 4; A merged with A gives fire 4 range 2, maxHp 6; a hybrid reaching the far row again gets no `pendingMerge`; `skipMerge` clears it.
 - Win, draw, pass, serialize round trip, no mutation of inputs, `deserialize('WG1.x')` throws.
 
+# Computer opponent
+
+`src/ai.js` is `window.WarGame.AI`, a classic script loaded after `engine.js` and before `ui.js`. It has no DOM, no storage and no state of its own, and it uses nothing outside `window.WarGame.Engine`, so it runs from `file://` and inside the single-file build like the rest; it reads the clock only to know when to stop searching.
+
+```
+LEVELS: ['easy', 'medium', 'hard']
+
+planTurn(state, level, opts?) -> Action[]
+  The whole turn of the player to move, as engine actions that are legal when
+  applied in order with Engine.apply: the activations, the merge or skipMerge
+  that a piece reaching its far row forces, a heal for every hurt piece left
+  over, and endTurn last. Synchronous, and it never changes the state given.
+  A level that is not one of the three is played as medium.
+  opts: random    a function returning [0,1), default Math.random
+        budgetMs  the search's time budget, default 800
+        maxNodes  a cap on the actions applied while searching; with maxNodes
+                  and no budgetMs the clock is ignored, which is how the tests
+                  get the same turn out of every run
+```
+
+Two things the caller has to know. A turn that takes the enemy's last piece ends the game, and `endTurn` is illegal once there is a winner, so such a plan stops at the winning action instead of ending the turn; a state that already has a winner yields an empty plan. And a turn that has already begun is continued rather than refused: the pieces in `turn.used` stay used, and a `pendingMerge` left over from a half-played turn is answered before anything else.
+
+## The three levels
+
+**easy** picks one legal action at random, over and over, until no piece may act. Attacks and shots are weighted four times a move, which is what keeps two easy players from wandering the board for ever; it walks into losing exchanges and takes a free kill only by accident. It merges with a random kind and never declines a merge.
+
+**medium** is one turn deep: it builds the candidate turns below and plays the one whose position evaluates best.
+
+**hard** is alpha-beta over whole turns. A candidate turn is one move in the search, the `endTurn` between them is where the side to move flips, and depth counts turns, not actions. It deepens a turn at a time to at most three (its own turn, the reply, the answer to the reply) and throws away a depth the budget cut short, so the turn it plays always comes out of a finished search. Candidates are ordered by the static evaluation before they are searched and the list is then cut per ply: two turns deep it looks at 8 turns of its own and weighs up to 24 replies to each, three turns deep at 6 turns, 3 replies and 16 answers to those. The last ply of each is wide because weighing one more candidate there costs an evaluation and no applied action. Three turns deep costs tens of milliseconds a turn on this machine, far inside the 800 ms budget, and that margin is the point: a phone is several times slower, and where even that is not enough the budget cuts the last depth and the turn from the depth before is played.
+
+## Candidate turns
+
+A turn is a sequence: at most three activations by the combination rules, plus the shot a firing piece keeps after a single step. There are around a hundred legal actions in the opening position and a turn is three of them in order, so turns are built with a beam instead of being enumerated. At each activation every action of every piece that may still act is ordered by a cheap score read off the piece alone -- an attack by what it takes minus what it costs, a shot by what it takes, a move by how much danger it leaves behind, how much it creates and how much closer to the far row it ends. The best eight are applied, the positions they lead to are evaluated, the best six are kept, and the next activation grows out of those; the deeper plies of the hard search use narrower numbers. Every prefix is itself a turn the player may choose, so all of them are candidates, the empty turn included.
+
+Healing is outside all of this. It fills no slot in the combination, and a piece that was not activated loses nothing by healing, so every hurt piece left over heals at the end of the turn and the beam never spends a branch on it. The search does not apply those heals, so it reads both sides at up to half a health point below what they will have.
+
+## The evaluation
+
+One number, positive for the player asked about.
+
+| Term | Weight | What it counts |
+|---|---|---|
+| Strength | 0.9 | each point of current melee strength, which is `min(health, baseStr)` |
+| Fire | 1.1 | each point of fire strength, which health does not cap |
+| Health | 0.45 | each point of current health |
+| Far row | 0.06, and 3.6 more for a single-kind piece | closeness to the far row, squared for the second. A merge is worth about 4 and a piece one step short of it all but has it, so it is counted nearly in full: count it low and a search one turn from a merge would rather walk a square than take a piece. |
+| Threats | 0.35 and 0.15 | the biggest and the second biggest hit a side could make next turn, counted both ways, since a turn holds few activations |
+| Press | 0.5 | the mean distance from each enemy piece to our nearest piece |
+| Win | 1000 | a won position; a draw is 0 |
+
+Material comes first and no other term may outweigh it. Taking a piece worth V gives up at most 0.35 V, the standing threat it was, and at most 0.5, the whole press term, which lives between -0.5 and 0. The smallest piece on the board is a soldier at 1.35, so the worst a kill can be worth is 1.35 x 0.65 - 0.5 = 0.38, still a gain, and everything else a kill touches moves the same way: the dead piece stops threatening us and stops counting for its own side. This is the one thing an outside tester found broken in the first version. Press was scaled by the lead and summed over the pieces, so killing the enemy piece our archer stood next to destroyed a bonus worth more than the piece, and the computer declined a free shot -- the more it was winning, the worse the shot looked. Two tests hold it down now: the exact position it was found in, for medium and for hard, and a sweep that asserts every killing shot in a batch of positions raises the evaluation.
+
+A hit is worth the whole piece when it kills it, and 0.35 of the health it takes when the piece survives, because half of that heals back and the hit cost a whole activation. A melee hit is worth what it takes minus what the attacker takes back, so a soldier does not count as threatening a knight. Reach is read from distances alone: a diagonal step costs 2 and covers what two orthogonal steps cover, so the cheapest path over an empty board costs exactly the Manhattan distance, and a piece is taken to threaten whatever it could reach if the board between were empty. That sees a few threats that are not there and ignores the combination limits, and it reads both sides the same way.
+
+Press is there because without it the two sides stand off and heal for ever: every square within reach of an archer looks expensive, nobody closes, and the game is a hundred and fifty turns of shuffling. It is read off the enemy's pieces rather than our own -- how far each of them stands from our nearest piece -- so it asks us to close, it never asks us to keep an enemy alive to stay near it, and being a mean it stays inside its one weight however many pieces are left. It is also the one term that is not antisymmetric: both sides are paid to close, which nothing antisymmetric can do, since there what one side gains the other must lose. The search allows for that by scoring every reply with the root player's own evaluation, and by weighing many replies at its last ply, where one more costs an evaluation and no applied action.
+
+## The arena
+
+`dev/arena.js` plays one level against another and reports the wins and the planning time. It runs under node (`node dev/arena.js --games 60 --pairs medium:hard`) and in the browser through `dev/arena.html` (`?games=10&pairs=easy:medium,medium:hard&cap=150`), which plays one game per timer tick so the page keeps drawing and sets `document.title` to `DONE` at the end. Each level sits as player 0 in half the games and moves first in half of them, and the generator is seeded, so a run repeats exactly. A game that reaches the turn cap, 150 turns by default, is decided by material: pieces first, then health.
+
+Measured on 2026-09-22, 60 games a pairing, default budget, under node 20 on this machine:
+
+| Pairing | Result | Decided at the cap | Mean turns | Mean plan, first level | Mean plan, second |
+|---|---|---|---|---|---|
+| easy vs medium | medium 60-0 | 0 | 21 | 0.8 ms | 8.9 ms |
+| medium vs hard | hard 60-0 | 30 | 92 | 2.2 ms | 39.1 ms |
+| easy vs hard | hard 60-0 | 0 | 23 | 0.7 ms | 85.1 ms |
+| easy vs easy | 27-33 | 2 | 86 | 0.6 ms | 0.6 ms |
+
+Each level beats the one below it in every game. Two easy players finish 58 games of 60 by wiping each other out, which is what the weighting of attacks over moves is for. The turn cap is reached mostly in medium against hard, where hard has the material and the weaker side keeps its last pieces away from it. Hard thinks longest against easy, not against medium, because easy keeps more pieces alive and leaves a wider position to search.
+
+In the browser (Chrome on the same machine, 10 games a pairing) the same three pairings went 10-0 to medium, to hard and to hard again, with hard planning a turn in 29 ms on average against medium, 63 ms against easy, and 151 ms in its slowest turn of the whole run. The wait after a tap is therefore far under the second the budget allows, and it is a browser measurement: Chrome runs this code faster than node does.
+
 # UI
 
 ## Title
@@ -174,17 +250,23 @@ There is one window: the board with its panel. No menu screen. On first load a g
 
 The panel holds, top to bottom: the turn line (player color swatch and name, turn number), the used and available chips, the status line (may still fire, reasons, pass), End turn, Undo, and an icon bar of five equal icon buttons with an `aria-label` and a `title` in the current language:
 
-- New game (a plus-in-circle icon): starts a new game; when a game is in progress it first asks inside a small card over the board (The current game will be lost. Start anyway / Back).
+- New game (a plus-in-circle icon): opens the New game sheet inside a small card over the board (the opponent, the computer's level, Start / Back; see Computer opponent), which carries the sentence The current game will be lost while a game is in progress.
 - Appearance (a palette icon): a drawer with theme, player colors, square colors, presets, random colorful board with Reshuffle, coordinates.
 - Settings (a gear icon): a drawer with language, the Diagonal movement rule toggle (with the note Applies at the next new game), animations on or off.
 - Rules (an info icon): a scrollable sheet with the rules.
 - Share (a share icon): a sheet with everything that leaves the device, in this order: Invite (the share message with the link and the two home-screen steps, through `navigator.share` when it exists, else copied with a Copy button and the text shown for selecting by hand), Share this game (the link with `#g=<code>`, same mechanics; shown only with a game in progress), the game code (the `WG2.` code in a read-only field with Copy) and Load a game (a field to paste a code, with Load; a bad code shows an error and changes nothing). Nothing of this appears anywhere else.
 
-Drawers slide in from the inline end in landscape and up from the bottom in portrait, over the panel area, with a close button and closing on a tap outside or Escape; the board stays visible. Sheets and cards are centered over the board. Transitions are short fades and slides (150 to 250 ms). The merge dialog and the game over card (winner, Play again) stay as centered cards. Settings persist in `localStorage` under `wargame.settings`; the game autosaves under `wargame.game` after every action and an old `WG1.` save is treated as no save.
+Drawers slide in from the inline end in landscape and up from the bottom in portrait, over the panel area, with a close button and closing on a tap outside or Escape; the board stays visible. Sheets and cards are centered over the board. Transitions are short fades and slides (150 to 250 ms). The merge dialog and the game over card (winner, Play again) stay as centered cards. Settings persist in `localStorage` under `wargame.settings`; the game autosaves under `wargame.game` after every action, the mode it is played in beside it under `wargame.mode`, and an old `WG1.` save is treated as no save.
 
 The look of the panel is tight and professional: one type size for controls, one accent color, equal spacing, icon buttons in one row with a hairline separator above them, no decorative text. Under 600 px the panel is a compact bar under the board: the turn line and chips in one row, End turn and Undo in one row, the icon bar in one row.
 
 The invite link is the constant `GAME_URL = 'https://leoreh.github.io/Cole-s-War-Game/'` in `ui.js`, never `location.href`, so it is right even from `file://`.
+
+## Computer opponent
+
+The New game icon opens one small sheet: the opponent as a two-way segmented control (Two players / Computer), under it, only when Computer is chosen, the level as a three-way one (Easy / Medium / Hard), then Start and Back, with the sentence The current game will be lost above them while a game is under way. The choice is kept in the settings (`opponent`, `level`) and is the default next time. Against the computer the human is always player 0, the light side at the bottom, and the computer is player 1; who starts is still drawn at random and the ribbon announces it. Every place a player is named goes through `playerName(p)` in `ui.js`: Player 1 / Player 2 with two players, You / Computer against the computer (in Hebrew הצד שלך and המחשב, which are neutral as to gender).
+
+When the computer's turn comes, from the human's End turn, from a pass, from a saved game that resumes at its turn or from the draw at the start of a game, the board and End turn and Undo are blocked and the panel says the computer is thinking; after a short timeout, so the message paints, `window.WarGame.AI.planTurn(state, level)` gives the whole turn as engine actions. They are applied one at a time through the path a human's actions take, so every move, attack, shot, heal and merge animates the same way, with about 400 ms between them (250 with the animations off). The merge dialog never opens for the computer, which answers its own merges from the plan, and if the plan throws or an action no longer applies the turn is simply ended, so the game never hangs. Undo is off while the computer plays; inside the human's turn it steps back one action as always, and at the start of the turn, with nothing done yet, it gives back the computer's turn and the human's turn before it, landing at the start of that turn. The mode is saved beside the game under `wargame.mode`, so a reload resumes it; a position that arrives from a `#g=` link or from a pasted code is a game for two.
 
 ## Wordmark
 

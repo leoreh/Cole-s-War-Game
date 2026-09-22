@@ -239,6 +239,47 @@ body {
 }
 .lang-btn.is-on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 
+/* the segmented controls of the new game sheet: one track, the chosen
+   segment filled with the accent. The segments share the track equally,
+   so two or three of them fit a phone in either language */
+.seg[hidden] { display: none; }   /* a class display beats the plain attribute */
+.seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+}
+.seg-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  font-weight: 600;
+  flex: 1 1 0;
+  min-inline-size: 0;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-pill);
+  padding: 0.45em 0.4em;
+  min-block-size: 40px;
+  cursor: pointer;
+  touch-action: manipulation;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.seg-btn:hover { color: var(--fg); background: var(--soft-2); }
+.seg-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.seg-btn.is-on {
+  color: var(--accent-ink);
+  background: var(--accent);
+  box-shadow: var(--btn-drop);
+}
+.seg-btn.is-on:hover { background: var(--accent); color: var(--accent-ink); }
+
 /* --------------------------------------------------- stage and board --- */
 
 .stage {
@@ -2331,12 +2372,16 @@ body.theme-toy .frag {
     </section>
   </div>
 
-  <!-- ========================================= the new game question -->
-  <div id="ov-confirm" class="overlay" hidden>
-    <div class="dialog dialog--ask" role="dialog" aria-modal="true">
-      <p data-i18n="game.confirmNew"></p>
+  <!-- ============================================ the new game sheet -->
+  <div id="ov-newgame" class="overlay" hidden>
+    <div class="dialog dialog--ask" role="dialog" aria-modal="true" aria-labelledby="ng-title">
+      <h2 id="ng-title" data-i18n="game.newGame"></h2>
+      <!-- the two controls are drawn by ui.js, so they follow the language -->
+      <div class="seg" id="seg-opponent" role="group"></div>
+      <div class="seg" id="seg-level" role="group" hidden></div>
+      <p id="ng-warn" data-i18n="game.confirmNew" hidden></p>
       <div class="row row--center">
-        <button type="button" id="btn-new-yes" class="btn btn--primary" data-i18n="game.confirmStart"></button>
+        <button type="button" id="btn-new-yes" class="btn btn--primary" data-i18n="game.start"></button>
         <button type="button" id="btn-new-no" class="btn" data-i18n="common.back"></button>
       </div>
     </div>
@@ -2390,10 +2435,21 @@ window.WarGame = window.WarGame || {};
     'game.appearance': 'מראה',
     'game.share': 'שיתוף',
     'game.confirmNew': 'המשחק הנוכחי יאבד.',
-    'game.confirmStart': 'להתחיל בכל זאת',
+    'game.start': 'התחלה',
+    'game.opponent': 'יריב',
+    'game.level': 'רמה',
+
+    'opp.human': 'שני שחקנים',
+    'opp.computer': 'מול המחשב',
+    'level.easy': 'קל',
+    'level.medium': 'בינוני',
+    'level.hard': 'קשה',
 
     'player.0': 'שחקן 1',
     'player.1': 'שחקן 2',
+    /* מול המחשב האדם הוא תמיד שחקן 0; השמות האלה נייטרליים מבחינת מין */
+    'player.you': 'הצד שלך',
+    'player.computer': 'המחשב',
 
     'kind.S': 'חייל',
     'kind.K': 'אביר',
@@ -2421,9 +2477,10 @@ window.WarGame = window.WarGame || {};
     'msg.used': 'הכלי כבר פעל בתור הזה',
     'msg.comboFull': 'אין מקום לעוד {kind} בתור הזה',
     'msg.cannot': 'הכלי לא יכול לפעול עכשיו',
-    'msg.pass': 'ל{name} אין מהלך אפשרי, התור עובר',
+    'msg.pass': '{name}: אין מהלך אפשרי, התור עובר',
     'msg.pending': 'צריך להשלים את המיזוג',
     'msg.mayFire': 'הכלי יכול עדיין לירות',
+    'msg.thinking': 'המחשב חושב…',
 
     'merge.title': 'מיזוג',
     'merge.text': 'הכלי הגיע לשורה האחרונה ואפשר למזג אותו עם סוג נוסף.',
@@ -2550,10 +2607,21 @@ window.WarGame = window.WarGame || {};
     'game.appearance': 'Appearance',
     'game.share': 'Share',
     'game.confirmNew': 'The current game will be lost.',
-    'game.confirmStart': 'Start anyway',
+    'game.start': 'Start',
+    'game.opponent': 'Opponent',
+    'game.level': 'Level',
+
+    'opp.human': 'Two players',
+    'opp.computer': 'Computer',
+    'level.easy': 'Easy',
+    'level.medium': 'Medium',
+    'level.hard': 'Hard',
 
     'player.0': 'Player 1',
     'player.1': 'Player 2',
+    /* against the computer the human is always player 0 */
+    'player.you': 'You',
+    'player.computer': 'Computer',
 
     'kind.S': 'Soldier',
     'kind.K': 'Knight',
@@ -2577,13 +2645,14 @@ window.WarGame = window.WarGame || {};
     'panel.available': 'Available',
     'panel.nothing': 'none',
 
-    'msg.start': '{name} starts',
+    'msg.start': 'First turn: {name}',
     'msg.used': 'That piece has already acted this turn',
     'msg.comboFull': 'No room for another {kind} this turn',
     'msg.cannot': 'That piece cannot act now',
-    'msg.pass': '{name} has no legal action, the turn passes',
+    'msg.pass': '{name}: no legal action, the turn passes',
     'msg.pending': 'Finish the merge first',
     'msg.mayFire': 'The piece may still fire',
+    'msg.thinking': 'The computer is thinking…',
 
     'merge.title': 'Merge',
     'merge.text': 'The piece reached the far row. You may merge it with another kind.',
@@ -3897,6 +3966,492 @@ window.WarGame = window.WarGame || {};
 })(window);
 </script>
 <script>
+/* Cole's War Game: the computer opponent. Classic script, no modules, no DOM,
+   no external resources. Loaded after engine.js.
+
+   window.WarGame.AI.planTurn(state, level, opts) returns the whole turn of the
+   player to move as an array of engine actions, legal when applied in order
+   with Engine.apply, ending with endTurn (unless the turn wins the game, which
+   makes endTurn illegal). It reads the state and never changes it. */
+(function (global) {
+  'use strict';
+
+  var E = global.WarGame.Engine;
+  var LEVELS = ['easy', 'medium', 'hard'];
+
+  /* ---------- weights ----------
+     Everything the evaluation counts is in these numbers, in units of about
+     two thirds of a soldier per point. */
+
+  var W = {
+    str: 0.9,          // a point of melee strength
+    fire: 1.1,         // a point of fire strength, which health does not cap
+    hp: 0.45,          // a point of health
+    advance: 0.06,     // standing closer to the far row
+    promo: 3.6,        // a merge is worth about 4, and a piece a step from the
+                       // far row all but has it: value it or the search will
+                       // rather walk one square than take a piece
+    threat1: 0.35,     // the most a side can take off the other next turn,
+    threat2: 0.15,     // and the second most: a turn holds few activations
+    poke: 0.35,        // damage a piece survives is worth much less than a kill
+    press: 0.5,        // closing the distance, so that the two sides do meet;
+                       // kept under what the cheapest kill is worth (see below)
+    moveSafety: 0.5,   // ordering only: a move that leaves danger
+    moveOffense: 0.3,  // ordering only: a move that creates danger
+    win: 1000
+  };
+
+  /* How wide the turn beam is and how many candidate turns a ply of the search
+     looks at, by how many turns deep the search is going. One turn deep is what
+     medium plays, so hard's first pass is medium's turn. The last ply of each
+     profile is wide because weighing a reply there costs one evaluation and no
+     applied action, and because the evaluation is not quite antisymmetric: the
+     reply that is best for the replier is not always the worst for us. */
+  var MEDIUM = { levels: 6, perNode: 8, beam: 6, cands: 1 };
+  var PROFILE = {
+    1: [MEDIUM],
+    2: [{ levels: 6, perNode: 8, beam: 6, cands: 8 },
+        { levels: 6, perNode: 6, beam: 4, cands: 24 }],
+    3: [{ levels: 6, perNode: 8, beam: 6, cands: 6 },
+        { levels: 5, perNode: 5, beam: 3, cands: 3 },
+        { levels: 5, perNode: 4, beam: 2, cands: 16 }]
+  };
+
+  var STEPS8 = [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [-1, 1], [1, -1], [1, 1]];
+
+  /* ---------- piece arithmetic (no allocation, called very often) ---------- */
+
+  function baseStr(p) {
+    var s = 0, k = p.kinds;
+    for (var i = 0; i < k.length; i++) s += E.KINDS[k[i]].str;
+    return s;
+  }
+
+  function fireOf(p) {
+    var s = 0, k = p.kinds;
+    for (var i = 0; i < k.length; i++) s += E.KINDS[k[i]].fire;
+    return s;
+  }
+
+  function rangeOf(p) {
+    var s = 0, k = p.kinds;
+    for (var i = 0; i < k.length; i++) if (E.KINDS[k[i]].range > s) s = E.KINDS[k[i]].range;
+    return s;
+  }
+
+  function moveOf(p) {
+    var s = 0, k = p.kinds;
+    for (var i = 0; i < k.length; i++) if (E.KINDS[k[i]].move > s) s = E.KINDS[k[i]].move;
+    return s;
+  }
+
+  function strOf(p) { return Math.min(p.hp, baseStr(p)); }
+
+  // What the piece would be worth at that health. Health caps melee strength,
+  // so a hurt knight is worth much less, while fire does not fall with health.
+  function valueAt(p, hp) {
+    if (hp <= 0) return 0;
+    return W.str * Math.min(hp, baseStr(p)) + W.fire * fireOf(p) + W.hp * hp;
+  }
+
+  function pieceValue(p) { return valueAt(p, p.hp); }
+
+  function damageValue(p, dmg) { return pieceValue(p) - valueAt(p, p.hp - dmg); }
+
+  // Closeness to the far row: a little for everyone, much more for a piece that
+  // still has a merge waiting there.
+  function placeAt(p, row) {
+    var far = p.owner === 0 ? 7 : 0;
+    var adv = (7 - Math.abs(far - row)) / 7;
+    return W.advance * adv + (p.kinds.length === 1 ? W.promo * adv * adv : 0);
+  }
+
+  function placeValue(p) { return placeAt(p, p.row); }
+
+  /* ---------- threats ----------
+     A cheap answer to "what could the other side take off this piece next
+     turn". Distances ignore blocking pieces and spent slots, so it sees a few
+     threats that are not there; both sides are read the same way. */
+
+  function aligned(r, c, tr, tc, range) {
+    var dr = Math.abs(tr - r), dc = Math.abs(tc - c);
+    if (dr !== 0 && dc !== 0) return false;
+    var d = dr + dc;
+    return d > 0 && d <= range;
+  }
+
+  // A firing piece may take one step and still fire, so its neighbours count.
+  function canFireOn(state, r, c, tr, tc, range) {
+    if (aligned(r, c, tr, tc, range)) return true;
+    var n = (state.rules && state.rules.diagonalMoves) ? 8 : 4;
+    for (var i = 0; i < n; i++) {
+      var rr = r + STEPS8[i][0], cc = c + STEPS8[i][1];
+      if (rr < 0 || rr > 7 || cc < 0 || cc > 7) continue;
+      if (aligned(rr, cc, tr, tc, range)) return true;
+    }
+    return false;
+  }
+
+  /* What a hit is worth to the side making it. A kill is worth the whole piece;
+     damage it survives is worth much less, since half of it heals back and the
+     hit cost a whole activation. Without that gap the two sides simply stay out
+     of each other's range. */
+  function hitValue(p, dmg) {
+    return dmg >= p.hp ? pieceValue(p) : W.poke * damageValue(p, dmg);
+  }
+
+  /* A diagonal step costs 2 and covers what two orthogonal steps cover, so the
+     cheapest path over an empty board costs exactly the Manhattan distance. */
+  function threat(state, atk, ar, ac, tgt, tr, tc) {
+    var best = 0, f = fireOf(atk);
+    if (f > 0 && canFireOn(state, ar, ac, tr, tc, rangeOf(atk))) best = hitValue(tgt, f);
+    var s = strOf(atk);
+    if (s > 0) {
+      var d = Math.abs(ar - tr) + Math.abs(ac - tc);
+      if (d > 0 && d <= moveOf(atk)) {
+        var net = hitValue(tgt, s) - hitValue(atk, strOf(tgt)); // melee costs the attacker too
+        if (net > best) best = net;
+      }
+    }
+    return best;
+  }
+
+  function worstThreat(state, foes, p, row, col) {
+    var best = 0;
+    for (var i = 0; i < foes.length; i++) {
+      var v = threat(state, foes[i], foes[i].row, foes[i].col, p, row, col);
+      if (v > best) best = v;
+    }
+    return best;
+  }
+
+  /* One pass over a side: how much of it hangs, and how far it stands from the
+     other side. `exposed` keeps only the two biggest threats, since one turn
+     holds few activations and summing every threat would count the same turn
+     over and over. `far` is the mean distance from a piece of this side to the
+     nearest piece of the other, 0 when every one of them is next to an enemy
+     and 1 when they are all seven steps away or more. It is a mean, so the
+     whole term it feeds stays inside one weight however many pieces are left. */
+  function sideInfo(state, side, foes) {
+    var top1 = 0, top2 = 0, far = 0, i, j;
+    for (i = 0; i < side.length; i++) {
+      var p = side[i], best = 0, nd = 99;
+      for (j = 0; j < foes.length; j++) {
+        var f = foes[j];
+        var d = Math.abs(p.row - f.row) + Math.abs(p.col - f.col);
+        if (d < nd) nd = d;
+        var v = threat(state, f, f.row, f.col, p, p.row, p.col);
+        if (v > best) best = v;
+      }
+      if (best > top1) { top2 = top1; top1 = best; }
+      else if (best > top2) top2 = best;
+      far += Math.min(7, nd) / 7;
+    }
+    return {
+      exposed: W.threat1 * top1 + W.threat2 * top2,
+      far: side.length ? far / side.length : 0
+    };
+  }
+
+  /* ---------- evaluation ----------
+     Positive is good for `me`. Every term but the press below is antisymmetric:
+     what one side gains the other loses. The press term is each side's own, so
+     both are pushed to close, which no antisymmetric term can do; the search
+     therefore scores a reply with the root player's own evaluation rather than
+     trusting the replying side's order.
+
+     Material comes first and no other term may outweigh it. Taking a piece
+     worth V gives up at most W.threat1 * V, the standing threat on it that we
+     no longer hold, and at most W.press, since press lives in [-W.press, 0]. The
+     smallest piece on the board is a soldier at 1.35, so with these weights the
+     worst a kill can be worth is 1.35 * (1 - 0.35) - 0.5 = 0.38, still a gain.
+     Everything else a kill touches moves the right way: the dead piece stops
+     threatening us and stops counting for its own side. The test named `a
+     killing shot always raises the evaluation` holds this down. */
+
+  function evaluate(state, me) {
+    if (state.winner !== null) {
+      if (state.winner === 'draw') return 0;
+      return state.winner === me ? W.win : -W.win;
+    }
+    var ids = Object.keys(state.pieces), mine = [], foes = [], score = 0, i;
+    for (i = 0; i < ids.length; i++) {
+      var p = state.pieces[ids[i]];
+      var v = pieceValue(p) + placeValue(p);
+      if (p.owner === me) { score += v; mine.push(p); } else { score -= v; foes.push(p); }
+    }
+    var mi = sideInfo(state, mine, foes), fi = sideInfo(state, foes, mine);
+    /* Without this the two sides stand off and heal for ever. It is read off the
+       enemy's pieces, not ours: how far each of them stands from our nearest
+       piece. So it asks us to close, it never asks us to keep a piece alive to
+       stay close to it, and a dead enemy simply leaves the average. */
+    return score - W.press * fi.far - mi.exposed + fi.exposed;
+  }
+
+  /* ---------- budget ---------- */
+
+  function makeCtx(opts) {
+    var hasNodes = typeof opts.maxNodes === 'number';
+    var hasTime = typeof opts.budgetMs === 'number';
+    var ctx = {
+      nodes: 0,
+      maxNodes: hasNodes ? opts.maxNodes : Infinity,
+      // maxNodes alone means a test wants a deterministic cap: ignore the clock
+      deadline: (hasNodes && !hasTime) ? Infinity : Date.now() + (hasTime ? opts.budgetMs : 800),
+      aborted: false
+    };
+    ctx.over = function () {
+      if (this.aborted) return true;
+      if (this.nodes >= this.maxNodes || Date.now() > this.deadline) this.aborted = true;
+      return this.aborted;
+    };
+    return ctx;
+  }
+
+  function step(ctx, state, action) {
+    ctx.nodes += 1;
+    return E.apply(state, action).state;
+  }
+
+  /* ---------- the actions of one activation ---------- */
+
+  // Every action of every piece that may still act, heals left out: they are
+  // free of the combination count, so they are added once the turn is chosen.
+  function freeActions(state) {
+    var mine = E.piecesOf(state, state.turn.player), out = [], i, j;
+    for (i = 0; i < mine.length; i++) {
+      var p = mine[i], acts = E.legalActions(state, p.id);
+      for (j = 0; j < acts.length; j++) {
+        var a = acts[j];
+        if (a.type === 'heal') continue;
+        if (a.type === 'move') {
+          out.push({ piece: p, action: { type: 'move', piece: p.id, to: { row: a.to.row, col: a.to.col } } });
+        } else {
+          out.push({ piece: p, action: { type: a.type, piece: p.id, target: a.target } });
+        }
+      }
+    }
+    return out;
+  }
+
+  // Move ordering, from the piece alone, so that the beam only applies the few
+  // actions worth applying. Cheaper than evaluating every position they lead to.
+  function orderActions(state, opts) {
+    var foes = E.piecesOf(state, 1 - state.turn.player), here = {}, i, j;
+    for (i = 0; i < opts.length; i++) {
+      var o = opts[i], p = o.piece, a = o.action, sc;
+      if (a.type === 'attack') {
+        var t = state.pieces[a.target];
+        sc = hitValue(t, strOf(p)) - hitValue(p, strOf(t));
+      } else if (a.type === 'fire') {
+        sc = hitValue(state.pieces[a.target], fireOf(p)) + 0.4; // fire costs the shooter nothing
+      } else {
+        if (here[p.id] === undefined) here[p.id] = worstThreat(state, foes, p, p.row, p.col);
+        var off = 0;
+        for (j = 0; j < foes.length; j++) {
+          var v = threat(state, p, a.to.row, a.to.col, foes[j], foes[j].row, foes[j].col);
+          if (v > off) off = v;
+        }
+        sc = W.moveSafety * (here[p.id] - worstThreat(state, foes, p, a.to.row, a.to.col)) +
+          W.moveOffense * off + placeAt(p, a.to.row) - placeAt(p, p.row);
+      }
+      o.score = sc;
+    }
+    opts.sort(function (x, y) { return y.score - x.score; });
+    return opts;
+  }
+
+  // A merge is pending after a single-kind piece ends on its far row; nothing
+  // else is legal until it is answered.
+  function mergeTail(ctx, state, mover, rnd) {
+    var acts = [], s = state, guard = 0;
+    while (s.pendingMerge !== null && guard++ < 4) {
+      var id = s.pendingMerge;
+      var tries = [
+        { type: 'merge', piece: id, kind: 'K' },
+        { type: 'merge', piece: id, kind: 'A' },
+        { type: 'merge', piece: id, kind: 'S' },
+        { type: 'skipMerge', piece: id }
+      ];
+      var pick, next;
+      if (rnd) {                                   // easy: any merge, never a skip
+        pick = tries[Math.min(2, Math.floor(rnd() * 3))];
+        next = step(ctx, s, pick);
+      } else {
+        var bestScore = -Infinity;
+        for (var i = 0; i < tries.length; i++) {
+          var t = step(ctx, s, tries[i]);
+          var v = evaluate(t, mover);
+          if (v > bestScore) { bestScore = v; pick = tries[i]; next = t; }
+        }
+      }
+      acts.push(pick);
+      s = next;
+    }
+    return { actions: acts, state: s };
+  }
+
+  /* ---------- candidate turns ----------
+     A beam over the activations of one turn. Every prefix is itself a turn the
+     player may choose, so each one is kept as a candidate. */
+
+  function byScore(a, b) { return b.score - a.score; }
+
+  function candidates(ctx, state, cfg) {
+    var mover = state.turn.player;
+    var root = { actions: [], state: state, score: evaluate(state, mover) };
+    var out = [root], frontier = [root], level, i, j;
+
+    for (level = 0; level < cfg.levels; level++) {
+      var pool = [];
+      for (i = 0; i < frontier.length; i++) {
+        var node = frontier[i];
+        if (node.state.winner !== null) continue;
+        var opts = orderActions(node.state, freeActions(node.state));
+        var kept = Math.min(opts.length, cfg.perNode);
+        for (j = 0; j < kept; j++) {
+          if (ctx.over()) break;
+          var s = step(ctx, node.state, opts[j].action);
+          var acts = node.actions.concat([opts[j].action]);
+          if (s.pendingMerge !== null) {
+            var m = mergeTail(ctx, s, mover, null);
+            s = m.state;
+            acts = acts.concat(m.actions);
+          }
+          pool.push({ actions: acts, state: s, score: evaluate(s, mover) });
+        }
+        if (ctx.over()) break;
+      }
+      if (!pool.length) break;
+      pool.sort(byScore);
+      for (j = 0; j < pool.length; j++) out.push(pool[j]);
+      frontier = pool.slice(0, cfg.beam);
+      if (ctx.over()) break;
+    }
+    out.sort(byScore);
+    return out;
+  }
+
+  /* ---------- the levels ---------- */
+
+  // easy: a random legal turn, with attacks and shots four times as likely as
+  // moves so that games between two easy players come to an end.
+  function planEasy(ctx, state, rnd) {
+    var acts = [], s = state, guard = 0;
+    while (guard++ < 12 && s.winner === null) {
+      var opts = freeActions(s);
+      if (!opts.length) break;
+      var total = 0, i;
+      for (i = 0; i < opts.length; i++) total += (opts[i].action.type === 'move' ? 1 : 4);
+      var r = rnd() * total, pick = opts[opts.length - 1].action;
+      for (i = 0; i < opts.length; i++) {
+        r -= (opts[i].action.type === 'move' ? 1 : 4);
+        if (r < 0) { pick = opts[i].action; break; }
+      }
+      s = step(ctx, s, pick);
+      acts.push(pick);
+      if (s.pendingMerge !== null) {
+        var m = mergeTail(ctx, s, state.turn.player, rnd);
+        s = m.state;
+        acts = acts.concat(m.actions);
+      }
+      if (ctx.over()) break;
+    }
+    return { actions: acts, state: s };
+  }
+
+  // medium: the turn whose position, one turn deep, evaluates best.
+  function planMedium(ctx, state) {
+    return candidates(ctx, state, MEDIUM)[0];
+  }
+
+  /* hard: alpha-beta over whole turns. Each candidate turn is a move in the
+     search, the endTurn between them is where the side to move flips, and the
+     beam keeps the branching down. Depth counts turns. */
+  function search(ctx, state, root, depth, rootDepth, alpha, beta) {
+    var mover = state.turn.player, max = mover === root;
+    if (state.winner !== null || depth <= 0) {
+      return { value: evaluate(state, root), actions: [] };
+    }
+    var profile = PROFILE[rootDepth] || PROFILE[3];
+    var cfg = profile[Math.min(profile.length - 1, rootDepth - depth)];
+    var cands = candidates(ctx, state, cfg);
+    var best = max ? -Infinity : Infinity;
+    var bestActions = cands[0].actions, bestState = cands[0].state;
+    var limit = Math.min(cands.length, cfg.cands);
+
+    for (var i = 0; i < limit; i++) {
+      var c = cands[i], v;
+      if (c.state.winner !== null || depth === 1) {
+        v = evaluate(c.state, root);
+      } else {
+        if (ctx.over()) break;
+        var after = step(ctx, c.state, { type: 'endTurn' });
+        v = search(ctx, after, root, depth - 1, rootDepth, alpha, beta).value;
+      }
+      if (max ? v > best : v < best) { best = v; bestActions = c.actions; bestState = c.state; }
+      if (max) { if (best > alpha) alpha = best; } else if (best < beta) beta = best;
+      if (alpha >= beta) break;
+      if (ctx.over()) break;
+    }
+    return { value: best, actions: bestActions, state: bestState };
+  }
+
+  function planHard(ctx, state) {
+    var me = state.turn.player, best = null;
+    for (var depth = 1; depth <= 3; depth++) {
+      var r = search(ctx, state, me, depth, depth, -Infinity, Infinity);
+      if (ctx.aborted && best !== null) break;    // a half-searched depth is thrown away
+      best = r;
+      if (ctx.aborted) break;
+    }
+    return best;
+  }
+
+  /* ---------- the turn ---------- */
+
+  function planTurn(state, level, opts) {
+    opts = opts || {};
+    var lvl = LEVELS.indexOf(level) >= 0 ? level : 'medium';
+    var rnd = typeof opts.random === 'function' ? opts.random : Math.random;
+    var ctx = makeCtx(opts);
+    var out = [], s = state, i;
+
+    if (s.winner !== null) return out;
+    if (s.pendingMerge !== null) {                 // a resumed game may sit on one
+      var m = mergeTail(ctx, s, s.turn.player, lvl === 'easy' ? rnd : null);
+      out = out.concat(m.actions);
+      s = m.state;
+    }
+    if (s.winner === null) {
+      var plan = lvl === 'easy' ? planEasy(ctx, s, rnd)
+        : (lvl === 'medium' ? planMedium(ctx, s) : planHard(ctx, s));
+      out = out.concat(plan.actions);
+      s = plan.state;
+    }
+    // Healing fills no slot, and a piece that has not acted has nothing to lose
+    // by it, so every hurt piece left over heals at the end of the turn.
+    var mine = E.piecesOf(s, s.turn.player);
+    for (i = 0; i < mine.length; i++) {
+      if (E.canHeal(s, mine[i].id)) {
+        var heal = { type: 'heal', piece: mine[i].id };
+        s = step(ctx, s, heal);
+        out.push(heal);
+      }
+    }
+    if (s.winner === null) out.push({ type: 'endTurn' }); // endTurn is illegal once won
+    return out;
+  }
+
+  global.WarGame = global.WarGame || {};
+  global.WarGame.AI = {
+    LEVELS: LEVELS,
+    planTurn: planTurn,
+    evaluate: evaluate     // exposed for reading a position by hand in the arena
+  };
+})(window);
+</script>
+<script>
 /* =====================================================================
    ui.js - the board, the panel, the drawers and the sheets that open
    from its icon bar, input, animation, settings, storage, the invite
@@ -3918,7 +4473,14 @@ window.WarGame = window.WarGame || {};
 
   var SETTINGS_KEY = 'wargame.settings';
   var GAME_KEY = 'wargame.game';
+  var MODE_KEY = 'wargame.mode';
   var KIND_ORDER = ['K', 'A', 'S'];
+
+  /* against the computer the human is always player 0, the light side at
+     the bottom of the board, and the computer is player 1 */
+  var HUMAN = 0;
+  var COMPUTER = 1;
+  var LEVELS = ['easy', 'medium', 'hard'];
 
   /* the link is a constant, so an invite sent from a file:// copy or from
      the home-screen app still points at the page everyone can open */
@@ -3935,7 +4497,9 @@ window.WarGame = window.WarGame || {};
     boardColors: null,
     animations: true,
     coordinates: false,
-    diagonalMoves: true
+    diagonalMoves: true,
+    opponent: 'human',     /* the New game sheet remembers the last choice */
+    level: 'medium'
   };
 
   var PRESETS = [
@@ -3952,10 +4516,13 @@ window.WarGame = window.WarGame || {};
   var G = {
     settings: null,
     state: null,      /* the game on the board: there is always one */
-    history: [],      /* states before each action of the current turn */
+    mode: 'human',    /* 'human': two players; 'computer': player 1 is the AI */
+    level: 'medium',  /* the computer's level in this game */
+    history: [],      /* { state, start } before each action: see pushHistory */
     sel: null,        /* id of the selected piece */
     acts: [],         /* its legal actions */
-    busy: false,      /* animating: input is blocked */
+    busy: false,      /* animating or the computer is playing: input is blocked */
+    aiRun: 0,         /* the id of the computer turn now playing */
     boardClass: ''    /* the theme class now on the board and on <body> */
   };
 
@@ -4003,6 +4570,22 @@ window.WarGame = window.WarGame || {};
   }
 
   function playerColor(p) { return p === 1 ? G.settings.p1 : G.settings.p0; }
+
+  /* every place a player is named reads it from here: against the computer
+     the two sides are the human and the machine, not player 1 and player 2 */
+  function playerName(p) {
+    if (G.mode === 'computer') {
+      return t(p === COMPUTER ? 'player.computer' : 'player.you');
+    }
+    return t('player.' + p);
+  }
+
+  function levelOf(v) { return LEVELS.indexOf(v) >= 0 ? v : 'medium'; }
+
+  function setMode(opponent, level) {
+    G.mode = opponent === 'computer' ? 'computer' : 'human';
+    G.level = levelOf(level || G.settings.level);
+  }
 
   /* activatableKinds gives a Set; an array reads the same way here */
   function inKinds(set, kind) {
@@ -4169,6 +4752,7 @@ window.WarGame = window.WarGame || {};
     shareMsg('');
     renderPieces();
     if (G.state) { renderPanel(); renderMarks(); }
+    if (isOpen('newgame')) renderNewGame();
     if (isOpen('merge')) renderMergeDialog();
     if (isOpen('over')) renderOver();
     if (isOpen('share')) renderShare();
@@ -4241,11 +4825,11 @@ window.WarGame = window.WarGame || {};
     }, 230);
   }
 
-  var OVERLAYS = ['appearance', 'settings', 'rules', 'share', 'confirm',
+  var OVERLAYS = ['appearance', 'settings', 'rules', 'share', 'newgame',
     'merge', 'over'];
 
   /* the ones a tap outside or Escape closes, innermost first */
-  var LIGHT = ['share', 'rules', 'appearance', 'settings', 'confirm'];
+  var LIGHT = ['share', 'rules', 'appearance', 'settings', 'newgame'];
 
   function anyOverlayOpen() {
     for (var i = 0; i < OVERLAYS.length; i++) if (isOpen(OVERLAYS[i])) return true;
@@ -4256,10 +4840,51 @@ window.WarGame = window.WarGame || {};
 
   function gameOn() { return !!(G.state && G.state.winner === null); }
 
-  /* a game under way is only lost on purpose */
-  function askNewGame() {
-    if (gameOn()) openOv('confirm');
-    else newGame();
+  /* the choice the sheet is showing; it opens on the one remembered and
+     only reaches the settings when Start is pressed */
+  var NG = { opponent: 'human', level: 'medium' };
+
+  function segHTML(items, chosen) {
+    var out = '';
+    for (var i = 0; i < items.length; i++) {
+      var on = items[i].v === chosen;
+      out += '<button type="button" class="seg-btn' + (on ? ' is-on' : '') +
+        '" data-v="' + items[i].v + '" aria-pressed="' + (on ? 'true' : 'false') +
+        '">' + esc(items[i].label) + '</button>';
+    }
+    return out;
+  }
+
+  function renderNewGame() {
+    el.segOpponent.innerHTML = segHTML([
+      { v: 'human', label: t('opp.human') },
+      { v: 'computer', label: t('opp.computer') }
+    ], NG.opponent);
+    el.segOpponent.setAttribute('aria-label', t('game.opponent'));
+
+    el.segLevel.innerHTML = segHTML(LEVELS.map(function (id) {
+      return { v: id, label: t('level.' + id) };
+    }), NG.level);
+    el.segLevel.setAttribute('aria-label', t('game.level'));
+    el.segLevel.hidden = NG.opponent !== 'computer';
+
+    /* the sentence about the game that is lost belongs to a game still on */
+    el.ngWarn.hidden = !gameOn();
+  }
+
+  function openNewGame() {
+    NG.opponent = G.settings.opponent === 'computer' ? 'computer' : 'human';
+    NG.level = levelOf(G.settings.level);
+    renderNewGame();
+    openOv('newgame');
+  }
+
+  function startChosen() {
+    G.settings.opponent = NG.opponent;
+    G.settings.level = NG.level;
+    saveSettings();
+    closeOv('newgame');
+    newGame();
   }
 
   /* ------------------------------------------------------- the layout --- */
@@ -4377,7 +5002,7 @@ window.WarGame = window.WarGame || {};
     var pl = st.turn.player;
 
     el.turnSwatch.style.background = playerColor(pl);
-    el.turnName.textContent = t('player.' + pl);
+    el.turnName.textContent = playerName(pl);
     el.turnNumber.textContent = t('game.turn', { n: st.turn.number });
     document.documentElement.style.setProperty('--p-cur', playerColor(pl));
     document.documentElement.style.setProperty('--p-cur-outline', outlineFor(playerColor(pl)));
@@ -4398,7 +5023,7 @@ window.WarGame = window.WarGame || {};
 
     var canHeal = !!(G.sel && hasAct('heal'));
     el.btnHeal.hidden = !canHeal;
-    el.btnUndo.disabled = G.history.length === 0 || G.busy;
+    el.btnUndo.disabled = !canUndo();
     el.btnEndTurn.disabled = st.winner !== null || !!st.pendingMerge || G.busy;
   }
 
@@ -4556,19 +5181,28 @@ window.WarGame = window.WarGame || {};
 
   /* --------------------------------------------------------- actions ---- */
 
+  /* one action of the human; the computer's go through applyAction */
   function doAction(action) {
-    var st = G.state;
-    if (!st || G.busy) return;
-    var prev = st, res;
+    if (!G.state || G.busy) return;
+    if (G.mode === 'computer' && G.state.turn.player === COMPUTER) return;
+    applyAction(action, null);
+  }
+
+  /* applies one action, plays its events and answers whether it took.
+     opts.hold keeps the input blocked, because the computer's turn is not
+     over yet; opts.ai leaves the merge dialog and the fire hint alone,
+     since they belong to a human at the board */
+  function applyAction(action, opts) {
+    var prev = G.state, res, run = G.aiRun;
+    if (!prev) return Promise.resolve(false);
     try {
-      res = Engine.apply(st, action);
+      res = Engine.apply(prev, action);
     } catch (err) {
-      msg(t('msg.cannot'));
-      return;
+      if (!opts || !opts.ai) msg(t('msg.cannot'));
+      return Promise.resolve(false);
     }
 
-    if (action.type === 'endTurn') G.history = [];
-    else G.history.push(prev);
+    pushHistory(prev, action);
 
     G.state = res.state;
     G.sel = null;
@@ -4577,33 +5211,44 @@ window.WarGame = window.WarGame || {};
     G.busy = true;
     renderPanel();
 
-    playEvents(res.events || [], prev, res.state).then(function () {
-      G.busy = false;
+    return playEvents(res.events || [], prev, res.state).then(function () {
+      /* a new game may have come on the board while this played out: then
+         nothing of this action is left to say, and the new game rules */
+      if (run !== G.aiRun) return false;
+      G.busy = !!(opts && opts.hold);
       render();
       autosave();
-      afterAction(res.events || [], action);
+      afterAction(res.events || [], action, !!(opts && opts.ai));
+      if (!opts) maybeComputerTurn();
+      return true;
     });
   }
 
-  function afterAction(events, action) {
+  function afterAction(events, action, ai) {
     var st = G.state;
     var line = '';
     for (var i = 0; i < events.length; i++) {
       if (events[i].type === 'pass') {
-        line = t('msg.pass', { name: t('player.' + events[i].player) });
+        line = t('msg.pass', { name: playerName(events[i].player) });
       }
     }
     if (st.winner !== null) { msg(line); openOver(); return; }
-    if (st.pendingMerge) { msg(line); openMerge(); return; }
+    if (st.pendingMerge) {
+      if (line || !ai) msg(line);
+      if (!ai) openMerge();      /* the computer answers its own merges */
+      return;
+    }
 
     /* a firing piece that took a single step keeps its shot: it stays
        selected with its targets on, and the panel says so */
-    if (action && action.type === 'move' && Engine.canFireAgain(st, action.piece)) {
+    if (!ai && action && action.type === 'move' &&
+        Engine.canFireAgain(st, action.piece)) {
       select(action.piece);
       msg(t('msg.mayFire'));
       return;
     }
-    msg(line);
+    /* while the computer plays, the panel goes on saying so */
+    if (line || !ai) msg(line);
   }
 
   function endTurn() {
@@ -4612,15 +5257,130 @@ window.WarGame = window.WarGame || {};
     doAction({ type: 'endTurn' });
   }
 
+  /* ------------------------------------------------------- the history --
+     The state before each action. With two players the history is the
+     current turn alone and End turn clears it. Against the computer it
+     runs across the turns, and the entry that opens a human turn carries a
+     mark, so that Undo pressed before anything is done steps back over the
+     computer's turn to the start of the human turn before it.
+     --------------------------------------------------------------------- */
+
+  function humanTurnStart(st) {
+    return !!st && st.winner === null && st.turn.player === HUMAN &&
+      st.turn.used.length === 0 && !st.pendingMerge;
+  }
+
+  function pushHistory(prev, action) {
+    if (G.mode !== 'computer') {
+      if (action.type === 'endTurn') G.history = [];
+      else G.history.push({ state: prev, start: false });
+      return;
+    }
+    G.history.push({ state: prev, start: humanTurnStart(prev) });
+  }
+
+  function hasMark() {
+    for (var i = 0; i < G.history.length; i++) if (G.history[i].start) return true;
+    return false;
+  }
+
+  function canUndo() {
+    if (G.busy || !G.history.length) return false;
+    if (G.mode !== 'computer') return true;
+    /* at the start of a turn Undo gives back a whole pair of turns, so
+       there has to be a human turn on the way back to land in */
+    return humanTurnStart(G.state) ? hasMark() : true;
+  }
+
   function undo() {
-    if (G.busy || !G.history.length) return;
-    G.state = G.history.pop();
+    if (!canUndo()) return;
+    var e = G.history.pop();
+    if (G.mode === 'computer' && humanTurnStart(G.state)) {
+      while (!e.start && G.history.length) e = G.history.pop();
+    }
+    G.state = e.state;
     G.sel = null;
     G.acts = [];
     msg('');
     render();
     autosave();
     if (G.state.pendingMerge) openMerge(); else closeOv('merge');
+  }
+
+  /* =====================================================================
+     THE COMPUTER
+     Its whole turn comes from window.WarGame.AI.planTurn as engine actions,
+     and they are applied one at a time through the path a human's actions
+     take, so every move, attack, shot, heal and merge animates the same
+     way, with a pause between them. The board and the buttons stay blocked
+     from the first action to the last. If the plan fails at any point the
+     turn is simply ended, so the game never hangs.
+     ===================================================================== */
+
+  function computerToPlay() {
+    return G.mode === 'computer' && !!G.state && G.state.winner === null &&
+      G.state.turn.player === COMPUTER;
+  }
+
+  function maybeComputerTurn() {
+    if (computerToPlay()) computerTurn();
+  }
+
+  /* the pause between two actions of the computer, so the human can follow */
+  function aiPause() {
+    var ms = animOn() ? 400 : 250;
+    return new Promise(function (r) { setTimeout(r, ms); });
+  }
+
+  function planTurn() {
+    var AI = window.WarGame.AI;
+    if (!AI || typeof AI.planTurn !== 'function') return null;
+    try { return AI.planTurn(G.state, G.level, {}); }
+    catch (e) { return null; }
+  }
+
+  async function computerTurn() {
+    var run = ++G.aiRun;
+    var turnNo = G.state.turn.number;
+    G.busy = true;
+    G.sel = null;
+    G.acts = [];
+    clearMarks();
+    msg(t('msg.thinking'));
+    renderPanel();
+
+    /* a breath, so the message is on the screen before the planning */
+    await new Promise(function (r) { setTimeout(r, 80); });
+    if (run !== G.aiRun) return;
+
+    var plan = planTurn();
+    if (!plan || !plan.length) plan = [{ type: 'endTurn' }];
+
+    for (var i = 0; i < plan.length; i++) {
+      if (!computerToPlay() || G.state.turn.number !== turnNo) break;
+      var ok = await applyAction(plan[i], { hold: true, ai: true });
+      if (run !== G.aiRun) return;
+      if (!ok) break;            /* an action the board no longer allows */
+      if (computerToPlay() && G.state.turn.number === turnNo) await aiPause();
+      if (run !== G.aiRun) return;
+    }
+
+    /* however the plan ended, the turn is handed back here */
+    if (computerToPlay() && G.state.pendingMerge) {
+      await applyAction({ type: 'skipMerge', piece: G.state.pendingMerge },
+        { hold: true, ai: true });
+      if (run !== G.aiRun) return;
+    }
+    if (computerToPlay() && G.state.turn.number === turnNo) {
+      await applyAction({ type: 'endTurn' }, { hold: true, ai: true });
+      if (run !== G.aiRun) return;
+    }
+
+    G.busy = false;
+    if (el.panelMsg.textContent === t('msg.thinking')) msg('');
+    render();
+    /* the human may have had no move at all: then it is the computer again */
+    maybeComputerTurn();
   }
 
   function render() {
@@ -4929,7 +5689,7 @@ window.WarGame = window.WarGame || {};
   async function animRibbon(player) {
     if (!animOn()) return;
     var color = playerColor(player);
-    el.ribbon.firstChild.textContent = t('player.' + player);
+    el.ribbon.firstChild.textContent = playerName(player);
     el.ribbon.style.background = color;
     el.ribbon.style.color = outlineFor(color);
     el.ribbon.classList.remove('is-on');
@@ -5019,7 +5779,7 @@ window.WarGame = window.WarGame || {};
     } else {
       el.overSwatch.style.display = '';
       el.overSwatch.style.background = playerColor(w);
-      el.overTitle.textContent = t('over.win', { name: t('player.' + w) });
+      el.overTitle.textContent = t('over.win', { name: playerName(w) });
     }
   }
 
@@ -5030,10 +5790,18 @@ window.WarGame = window.WarGame || {};
 
   /* ----------------------------------------------------- persistence ---- */
 
+  /* the game is the serialized state; the mode it is played in sits beside
+     it, so a reload against the computer resumes against the computer */
   function autosave() {
     try {
-      if (!G.state || G.state.winner !== null) localStorage.removeItem(GAME_KEY);
-      else localStorage.setItem(GAME_KEY, Engine.serialize(G.state));
+      if (!G.state || G.state.winner !== null) {
+        localStorage.removeItem(GAME_KEY);
+        localStorage.removeItem(MODE_KEY);
+      } else {
+        localStorage.setItem(GAME_KEY, Engine.serialize(G.state));
+        localStorage.setItem(MODE_KEY,
+          JSON.stringify({ opponent: G.mode, level: G.level }));
+      }
     } catch (e) { /* no storage */ }
   }
 
@@ -5041,7 +5809,19 @@ window.WarGame = window.WarGame || {};
     try { return localStorage.getItem(GAME_KEY); } catch (e) { return null; }
   }
 
+  /* the saved mode, or null: anything but a computer game is two players */
+  function savedMode() {
+    try {
+      var raw = localStorage.getItem(MODE_KEY);
+      if (!raw) return null;
+      var m = JSON.parse(raw);
+      if (!m || m.opponent !== 'computer') return null;
+      return { opponent: 'computer', level: levelOf(m.level) };
+    } catch (e) { return null; }
+  }
+
   function resetBoardNodes() {
+    G.aiRun += 1;          /* a plan still running belongs to the old game */
     G.history = [];
     G.sel = null;
     G.acts = [];
@@ -5057,7 +5837,7 @@ window.WarGame = window.WarGame || {};
     resetBoardNodes();
     closeOv('merge');
     closeOv('over');
-    closeOv('confirm');
+    closeOv('newgame');
     msg('');
     render();
     remeasure();
@@ -5067,23 +5847,32 @@ window.WarGame = window.WarGame || {};
   }
 
   function newGame() {
+    setMode(G.settings.opponent, G.settings.level);
     var st = Engine.newGame({ diagonalMoves: !!G.settings.diagonalMoves });
     startGame(st);
-    msg(t('msg.start', { name: t('player.' + st.turn.player) }));
+    msg(t('msg.start', { name: playerName(st.turn.player) }));
     G.busy = true;
+    renderPanel(); /* the buttons show as blocked while the ribbon plays */
     animRibbon(st.turn.player).then(function () {
       G.busy = false;
       renderMarks();
       renderPanel();
+      /* the draw may have given the computer the first turn */
+      maybeComputerTurn();
     });
   }
 
   /* a WG1. code no longer deserializes, so an old save is no save */
   function resumeSaved() {
-    var c = savedCode();
+    var c = savedCode(), st;
     if (!c) return false;
-    try { startGame(Engine.deserialize(c)); return true; }
+    try { st = Engine.deserialize(c); }
     catch (e) { return false; }
+    var m = savedMode();
+    setMode(m ? 'computer' : 'human', m ? m.level : null);
+    startGame(st);
+    maybeComputerTurn();
+    return true;
   }
 
   /* a code may arrive as a bare string or inside a #g=... link */
@@ -5099,6 +5888,7 @@ window.WarGame = window.WarGame || {};
     if (h.indexOf('#g=') !== 0) return false;
     try {
       var st = Engine.deserialize(cleanCode(h));
+      setMode('human');        /* a shared position is a game for two */
       startGame(st);
       return true;
     } catch (e) { return false; }
@@ -5219,6 +6009,7 @@ window.WarGame = window.WarGame || {};
     el.importCode.value = '';
     shareMsg(t('share.loaded'));
     closeOv('share');
+    setMode('human');          /* a pasted position is a game for two */
     startGame(st);
   }
 
@@ -5457,6 +6248,10 @@ window.WarGame = window.WarGame || {};
     el.exportCode = $('export-code');
     el.importCode = $('import-code');
 
+    el.segOpponent = $('seg-opponent');
+    el.segLevel = $('seg-level');
+    el.ngWarn = $('ng-warn');
+
     el.mergePiece = $('merge-piece');
     el.mergeChoices = $('merge-choices');
     el.overSwatch = $('over-swatch');
@@ -5472,18 +6267,27 @@ window.WarGame = window.WarGame || {};
     });
 
     /* --- the icon bar --- */
-    $('btn-newgame').addEventListener('click', askNewGame);
+    $('btn-newgame').addEventListener('click', openNewGame);
     $('btn-appearance').addEventListener('click', openAppearance);
     $('btn-settings').addEventListener('click', openSettings);
     $('btn-rules').addEventListener('click', openRules);
     $('btn-share').addEventListener('click', openShare);
 
-    /* --- the new game question --- */
-    $('btn-new-yes').addEventListener('click', function () {
-      closeOv('confirm');
-      newGame();
+    /* --- the new game sheet --- */
+    $('btn-new-yes').addEventListener('click', startChosen);
+    $('btn-new-no').addEventListener('click', function () { closeOv('newgame'); });
+    el.segOpponent.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('.seg-btn') : null;
+      if (!b) return;
+      NG.opponent = b.dataset.v;
+      renderNewGame();
     });
-    $('btn-new-no').addEventListener('click', function () { closeOv('confirm'); });
+    el.segLevel.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('.seg-btn') : null;
+      if (!b) return;
+      NG.level = b.dataset.v;
+      renderNewGame();
+    });
 
     /* --- closing --- */
     var closers = document.querySelectorAll('[data-close]');
@@ -5646,6 +6450,7 @@ window.WarGame = window.WarGame || {};
     setLang: setLang,
     importCode: function (code) {
       var st = Engine.deserialize(cleanCode(code));
+      setMode('human');
       startGame(st);
       return true;
     },

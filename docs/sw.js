@@ -3,10 +3,10 @@
    The version string is written by build.py from the hash of the built
    page, so every build gets a cache of its own and the old ones are
    dropped when this worker activates. In the source folder the string
-   stays ef6307184f8a, which is fine: there the page is many small files
+   stays b0badcdb4d41, which is fine: there the page is many small files
    and only the ones listed here are ever served from the cache. */
 
-var VERSION = 'ef6307184f8a';
+var VERSION = 'b0badcdb4d41';
 var CACHE = 'wargame-' + VERSION;
 
 var ASSETS = [
