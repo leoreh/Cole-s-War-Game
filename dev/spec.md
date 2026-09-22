@@ -2,11 +2,11 @@
 
 War Game is a two-player board game on an 8x8 chess board, played on one device (hot seat) on a PC, an iPad or a phone. It is a single-page web app with no build dependencies, no network use while playing and no frameworks, hosted on GitHub Pages so that anyone opens one link, and also available as one self-contained HTML file. The interface is in Hebrew and in English.
 
-Version 2 (2026-09-22, second round; version 1 is kept as `spec.v1.md`) changes the rules (health separate from strength, path movement with costs, passing over own pieces, archers with range 2 that move one step and fire), the interface (the board always visible, menu and settings as overlays with live changes, an Invite button), the looks (themes with their own piece sets and board decoration, richer animations, a real arrow) and the distribution (its own git repository, GitHub Pages, installable as a home-screen app, offline through a service worker).
+Version 2 (2026-09-22, second and third rounds; version 1 is kept as `spec.v1.md`) changes the rules (health separate from strength, path movement with costs, passing over own pieces, archers with range 2 that move one step and fire), the interface (the board always visible, one window with drawers and sheets opened from an icon bar, live changes, an Invite in the Share sheet), the looks (themes with their own piece sets and board decoration, richer animations, a real arrow) and the distribution (its own git repository, GitHub Pages, installable as a home-screen app, offline through a service worker).
 
 # Files
 
-Everything lives in `D:\Vaults\Obsi_Code\War Game\`, gitignored by the vault and a git repository of its own, pushed to `https://github.com/leoreh/Cole-s-War-Game`, served by GitHub Pages from the `docs` folder at `https://leoreh.github.io/Cole-s-War-Game/`.
+Everything lives in `D:\Code\Cole's War Game\`, a git repository of its own with nothing left in the vault, pushed to `https://github.com/leoreh/Cole-s-War-Game`, served by GitHub Pages from the `docs` folder at `https://leoreh.github.io/Cole-s-War-Game/`.
 
 - `src/index.html`: the shell. Classic `<script src>` tags in this order: `i18n.js`, `themes.js`, `icons.js`, `engine.js`, `ui.js`. No ES modules, so the file works from `file://`.
 - `src/style.css`: all styling, including the per-theme board decoration.
@@ -164,20 +164,23 @@ deserialize(string) -> state   throws on a bad string, including a 'WG1.' code
 
 # UI
 
-## Screens as overlays
+## One window
 
-The board is always on screen. When no game is running, it shows the opening position (a fresh game with player 0 first, not interactive, pieces slightly dimmed). Every other screen is an overlay over the board, so that a change of colors or theme shows on the real board at once:
+There is one window: the board with its panel. No menu screen. On first load a game starts at once (random first player, opening ribbon); on later loads the saved game is shown. Everything else opens from an icon bar in the panel and closes back to the board, so a color change is seen on the real board at once and no screen stands between the player and the game.
 
-- Menu: a centered card over the dimmed board. New game, Resume (when a game is in progress), Rules, Settings, Invite, language switch. New game while a game is in progress asks for a confirmation inside the card (The current game will be lost. Start anyway / Back). On first load with no saved game the menu is open; on load with a saved game the game is shown directly with the menu closed.
-- Settings: a drawer that slides in from the inline end in landscape and up from the bottom in portrait, over the panel area, with a close button and closing on a tap outside; the board stays visible. Sections: Appearance (theme, player colors, square colors, presets, random colorful board with Reshuffle, animations, coordinates), Rules (the diagonal moves toggle, with the note Applies at the next new game), Language, Transfer (Export game with the code shown and copied, Import game). Every appearance change applies immediately to the board on screen. Settings persist in `localStorage` under `wargame.settings`.
-- Rules: a scrollable sheet over the board.
-- Merge dialog and Game over: centered cards.
+The panel holds, top to bottom: the turn line (player color swatch and name, turn number), the used and available chips, the status line (may still fire, reasons, pass), End turn, Undo, and an icon bar of five equal icon buttons with an `aria-label` and a `title` in the current language:
 
-The game panel has, besides End turn, Undo and Menu, a small palette button that opens the settings drawer on Appearance. Transitions are short fades and slides (150 to 250 ms), never a page-like jump.
+- New game (a plus-in-circle icon): starts a new game; when a game is in progress it first asks inside a small card over the board (The current game will be lost. Start anyway / Back).
+- Appearance (a palette icon): a drawer with theme, player colors, square colors, presets, random colorful board with Reshuffle, coordinates.
+- Settings (a gear icon): a drawer with language, the Diagonal movement rule toggle (with the note Applies at the next new game), animations on or off.
+- Rules (an info icon): a scrollable sheet with the rules.
+- Share (a share icon): a sheet with everything that leaves the device, in this order: Invite (the share message with the link and the two home-screen steps, through `navigator.share` when it exists, else copied with a Copy button and the text shown for selecting by hand), Share this game (the link with `#g=<code>`, same mechanics; shown only with a game in progress), the game code (the `WG2.` code in a read-only field with Copy) and Load a game (a field to paste a code, with Load; a bad code shows an error and changes nothing). Nothing of this appears anywhere else.
 
-## Invite
+Drawers slide in from the inline end in landscape and up from the bottom in portrait, over the panel area, with a close button and closing on a tap outside or Escape; the board stays visible. Sheets and cards are centered over the board. Transitions are short fades and slides (150 to 250 ms). The merge dialog and the game over card (winner, Play again) stay as centered cards. Settings persist in `localStorage` under `wargame.settings`; the game autosaves under `wargame.game` after every action and an old `WG1.` save is treated as no save.
 
-An Invite button on the menu (and a small share icon in the game panel) shares the game. It builds a short message in the current language: one line saying what it is, the link `https://leoreh.github.io/Cole-s-War-Game/`, and one line saying how to put it on the home screen (Safari, Share, Add to Home Screen). When `navigator.share` exists (iPhone, iPad, Android) it opens the system share sheet with that text; otherwise it copies the text to the clipboard and shows the message in a small card with a Copy button, so it can also be selected by hand. The link is the constant `GAME_URL` in `ui.js`, never `location.href`, so it is right even from `file://`. When a game is in progress the card offers a second option, Share this game, whose link carries the state as `#g=<code>` so the other person opens the same position.
+The look of the panel is tight and professional: one type size for controls, one accent color, equal spacing, icon buttons in one row with a hairline separator above them, no decorative text. Under 600 px the panel is a compact bar under the board: the turn line and chips in one row, End turn and Undo in one row, the icon bar in one row.
+
+The invite link is the constant `GAME_URL = 'https://leoreh.github.io/Cole-s-War-Game/'` in `ui.js`, never `location.href`, so it is right even from `file://`.
 
 ## Board and pieces
 
@@ -254,4 +257,4 @@ Defaults come from the Classic theme's palette: player 0 `#efe6cf`, player 1 `#2
 
 # Repository
 
-The folder is its own git repository (`git init` in `War Game`, branch `main`), with a `.gitignore` for `__pycache__/` and `.DS_Store`. It is pushed to `https://github.com/leoreh/Cole-s-War-Game` (GitHub Pages on a free account needs a public repository; the repository was created private and must be made public, or the account upgraded, for the link to work), and Pages is set to serve from `main` at `/docs`. The vault's `.gitignore` already ignores the folder, so the nested repository does not touch the vault's history.
+The folder is its own git repository (branch `main`), with a `.gitignore` for `__pycache__/` and `.DS_Store`. It is pushed to `https://github.com/leoreh/Cole-s-War-Game` (GitHub Pages on a free account needs a public repository; the repository was created private and must be made public, or the account upgraded, for the link to work), and Pages is set to serve from `main` at `/docs`. The project lives outside the Obsidian vaults, under `D:\Code`.

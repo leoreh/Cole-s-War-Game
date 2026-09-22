@@ -1,27 +1,27 @@
-/* icons.js - the SVG glyphs of the pieces.
+/* icons.js - composing one piece out of a theme's glyphs and its badges.
    window.WarGame.Icons = { glyph(kind, opts), piece(kinds, opts) }
 
+   The glyphs themselves live in themes.js. This file asks the chosen theme
+   for them and keeps the classic set of version 1 as the fallback, so the
+   game still draws its pieces when themes.js is missing or an unknown theme
+   id is stored in the settings.
+
    Every shape is filled with currentColor and stroked with --piece-outline,
-   so a glyph takes the color of its owner from the element around it.
-   The three glyphs share one line: stroke-width 4, round joins and caps,
-   the same optical size inside the 100x100 box, and no hairline detail that
-   would close up at 40 px. */
+   so a glyph takes the color of its owner from the element around it. */
 
 window.WarGame = window.WarGame || {};
 
 (function () {
   'use strict';
 
-  /* ------------------------------------------------------------- the paths */
+  /* ------------------------------------------------- the classic fallback */
 
   var BODY =
     'fill:currentColor;stroke:var(--piece-outline,#1b1d24);stroke-width:4;' +
     'stroke-linejoin:round;stroke-linecap:round';
   var DETAIL = 'fill:var(--piece-outline,#1b1d24);stroke:none';
 
-  /* Soldier: a shield with two swords crossed behind it. The hilts rise to
-     the top corners and the points show below the rim, so the silhouette
-     stays a soldier's emblem and never a padlock. */
+  /* Soldier: a shield with two swords crossed behind it. */
   function sword(angle) {
     return '<g transform="rotate(' + angle + ' 50 50)">' +
       '<rect x="45.5" y="4" width="9" height="15" rx="4.5"/>' +
@@ -42,8 +42,7 @@ window.WarGame = window.WarGame || {};
     'L64,60 C58,62 55,66 55,74 L55,91 Z"/>';
   var KNIGHT_EYE = '<circle cx="74" cy="41" r="3.2" style="' + DETAIL + '"/>';
 
-  /* Archer: a bow bent into an even arc, its string drawn back to the nock,
-     and a fletched arrow on it. */
+  /* Archer: a bow bent into an even arc with a fletched arrow on the string. */
   var ARCHER =
     '<path d="M16,82 C12,72 11,60 13,48 C16,32 30,22 50,22 ' +
     'C70,22 84,32 87,48 C89,60 88,72 84,82 ' +
@@ -59,28 +58,12 @@ window.WarGame = window.WarGame || {};
   var SHAPES = { S: SOLDIER, K: KNIGHT, A: ARCHER };
   var DETAILS = { S: '', K: KNIGHT_EYE, A: '' };
 
-  /* A glyph that has a facing turns to face the enemy side of the board:
-     the knight mirrors left to right, the archer points its arrow the other
-     way. The soldier is symmetric and never turns. */
   var FLIP = {
     K: 'translate(100,0) scale(-1,1)',
     A: 'translate(0,100) scale(1,-1)'
   };
 
-  /* -------------------------------------------------------------- building */
-
-  function fmtStrength(v) {
-    var n = Number(v) || 0;
-    return n % 1 === 0 ? String(n) : n.toFixed(1);
-  }
-
-  function esc(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
-  /* glyph(kind) -> an <svg> string for one kind, viewBox 0 0 100 100.
-     opts: { flip: true to face the other way, cls: extra class names } */
-  function glyph(kind, opts) {
+  function fallbackGlyph(kind, opts) {
     opts = opts || {};
     var shape = SHAPES[kind];
     if (!shape) return '';
@@ -92,29 +75,100 @@ window.WarGame = window.WarGame || {};
       '</svg>';
   }
 
+  /* ------------------------------------------------------- the badge marks */
+
+  /* a small sword, drawn on its own so the strength badge is never read as
+     a second health number */
+  var SWORD_MARK =
+    '<svg class="mark-ico" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" ' +
+    'focusable="false" aria-hidden="true">' +
+    '<path d="M20.5 2.2 L21.8 3.5 L11.6 13.7 L10.3 12.4 Z ' +
+    'M9.6 13.1 L10.9 14.4 L8 17.3 L6.7 16 Z ' +
+    'M5.9 16.8 L7.2 18.1 L4.5 20.8 L2.6 21.4 L3.2 19.5 Z" ' +
+    'fill="currentColor"/></svg>';
+
+  /* the bow a piece carries while it still has its shot */
+  var BOW_MARK =
+    '<svg class="mark-ico" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" ' +
+    'focusable="false" aria-hidden="true">' +
+    '<path d="M6 2.5 C13 5 13 19 6 21.5" fill="none" stroke="currentColor" ' +
+    'stroke-width="2.4" stroke-linecap="round"/>' +
+    '<path d="M6 2.5 L6 21.5" fill="none" stroke="currentColor" ' +
+    'stroke-width="1.5" stroke-linecap="round"/>' +
+    '<path d="M6 12 L20 12 M16.5 9 L20 12 L16.5 15" fill="none" ' +
+    'stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+    'stroke-linejoin="round"/></svg>';
+
+  /* ------------------------------------------------------------- building */
+
+  function fmtStrength(v) {
+    var n = Number(v) || 0;
+    return n % 1 === 0 ? String(n) : n.toFixed(1);
+  }
+
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  function themeOf(id) {
+    var T = window.WarGame.Themes;
+    if (!T || typeof T.get !== 'function') return null;
+    try {
+      var th = T.get(id);
+      return th && typeof th.glyph === 'function' ? th : null;
+    } catch (e) { return null; }
+  }
+
+  /* glyph(kind, opts) -> an <svg> string for one kind, viewBox 0 0 100 100.
+     opts: { theme: id, flip: true to face the other way, cls: extra classes } */
+  function glyph(kind, opts) {
+    opts = opts || {};
+    var th = themeOf(opts.theme);
+    if (th) {
+      var out = th.glyph(kind, { flip: !!opts.flip, cls: opts.cls || '' });
+      if (out) return out;
+    }
+    return fallbackGlyph(kind, opts);
+  }
+
   /* piece(kinds, opts) -> the whole piece: the main glyph, the second kind of
-     a hybrid small at the top corner, and the strength badge at the bottom.
-     opts: { owner: 0|1, str, maxStr, badge: false to drop the badge } */
+     a hybrid small at the top corner, the health badge at the bottom, the
+     strength badge beside it and the bow of a kept shot.
+     opts: { owner: 0|1, theme, hp, maxHp, str, fireLeft, badge: false } */
   function piece(kinds, opts) {
     opts = opts || {};
     var owner = opts.owner === 1 ? 1 : 0;
     var list = kinds && kinds.length ? kinds : ['S'];
     var flip = owner === 1;
+    var theme = opts.theme;
 
     var html = '<span class="piece" data-owner="' + owner + '">';
-    html += glyph(list[0], { flip: flip, cls: 'glyph--main' });
+    html += glyph(list[0], { theme: theme, flip: flip, cls: 'glyph--main' });
     if (list.length > 1) {
       html += '<span class="piece-sub">' +
-        glyph(list[1], { flip: flip, cls: 'glyph--sub' }) + '</span>';
+        glyph(list[1], { theme: theme, flip: flip, cls: 'glyph--sub' }) + '</span>';
     }
 
-    var str = Number(opts.str);
-    var show = opts.badge !== false && isFinite(str) && str > 0;
-    if (show) {
-      var hurt = isFinite(opts.maxStr) && str < opts.maxStr;
-      html += '<span class="badge' + (hurt ? ' badge--hurt' : '') + '" dir="ltr">' +
-        esc(fmtStrength(str)) + '</span>';
+    if (opts.badge !== false) {
+      var hp = Number(opts.hp);
+      var maxHp = Number(opts.maxHp);
+      if (isFinite(hp)) {
+        var hurt = isFinite(maxHp) && hp < maxHp;
+        html += '<span class="badge badge--hp' + (hurt ? ' badge--hurt' : '') +
+          '" dir="ltr">' + esc(fmtStrength(hp)) + '</span>';
+      }
+      /* the strength badge only where strength and health part ways */
+      var str = Number(opts.str);
+      if (isFinite(str) && str > 0 && str !== hp) {
+        html += '<span class="badge badge--str" dir="ltr">' + SWORD_MARK +
+          '<span>' + esc(fmtStrength(str)) + '</span></span>';
+      }
     }
+
+    if (opts.fireLeft) {
+      html += '<span class="piece-bow" aria-hidden="true">' + BOW_MARK + '</span>';
+    }
+
     html += '</span>';
     return html;
   }
@@ -122,6 +176,8 @@ window.WarGame = window.WarGame || {};
   window.WarGame.Icons = {
     glyph: glyph,
     piece: piece,
+    bowMark: BOW_MARK,
+    swordMark: SWORD_MARK,
     fmtStrength: fmtStrength
   };
 })();

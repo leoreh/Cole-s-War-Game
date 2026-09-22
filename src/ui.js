@@ -1,5 +1,6 @@
 /* =====================================================================
-   ui.js - screens, board, input, animation, settings, persistence.
+   ui.js - the board, the overlays, input, animation, settings, storage,
+   the invite and the service worker.
    window.WarGame.UI
    ===================================================================== */
 
@@ -18,8 +19,13 @@ window.WarGame = window.WarGame || {};
   var GAME_KEY = 'wargame.game';
   var KIND_ORDER = ['K', 'A', 'S'];
 
+  /* the link is a constant, so an invite sent from a file:// copy or from
+     the home-screen app still points at the page everyone can open */
+  var GAME_URL = 'https://leoreh.github.io/Cole-s-War-Game/';
+
   var DEFAULT_SETTINGS = {
     lang: null,
+    theme: 'classic',
     p0: '#efe6cf',
     p1: '#2f3550',
     sqLight: '#efe0c3',
@@ -28,8 +34,7 @@ window.WarGame = window.WarGame || {};
     boardColors: null,
     animations: true,
     coordinates: false,
-    diagonalFire: true,
-    knightsJump: false
+    diagonalMoves: true
   };
 
   var PRESETS = [
@@ -45,11 +50,14 @@ window.WarGame = window.WarGame || {};
 
   var G = {
     settings: null,
-    state: null,
+    state: null,      /* the game being played, null when none is running */
+    idle: null,       /* the opening position drawn behind the menu */
     history: [],      /* states before each action of the current turn */
     sel: null,        /* id of the selected piece */
     acts: [],         /* its legal actions */
-    busy: false       /* animating: input is blocked */
+    busy: false,      /* animating: input is blocked */
+    inviteMode: 'app',
+    boardClass: ''    /* the theme class now on the board and on <body> */
   };
 
   var el = {};          /* cached nodes */
@@ -114,6 +122,42 @@ window.WarGame = window.WarGame || {};
     return new Promise(function (r) { setTimeout(r, d); });
   }
 
+  function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  /* --------------------------------------------------------- themes ---- */
+
+  function Themes() { return window.WarGame.Themes; }
+
+  function themeList() {
+    var T = Themes();
+    if (T && T.list && T.list.length) return T.list.slice();
+    return ['classic'];
+  }
+
+  function themeDef(id) {
+    var T = Themes();
+    if (!T || typeof T.get !== 'function') return null;
+    try { return T.get(id) || null; } catch (e) { return null; }
+  }
+
+  function themeName(id) {
+    var d = themeDef(id);
+    if (d && d.name && d.name[I18N.current]) return d.name[I18N.current];
+    return t('theme.' + id);
+  }
+
+  function themeClass(id) {
+    var d = themeDef(id);
+    return (d && d.boardClass) || ('theme-' + id);
+  }
+
+  function currentTheme() {
+    var id = G.settings.theme || 'classic';
+    return themeList().indexOf(id) >= 0 ? id : 'classic';
+  }
+
   /* ------------------------------------------------------- the settings - */
 
   function loadSettings() {
@@ -161,6 +205,16 @@ window.WarGame = window.WarGame || {};
     root.style.setProperty('--sq-light', G.settings.sqLight);
     root.style.setProperty('--sq-dark', G.settings.sqDark);
 
+    /* the theme decoration rides on one class, on the board and on <body> */
+    var cls = themeClass(currentTheme());
+    if (G.boardClass && G.boardClass !== cls) {
+      el.board.classList.remove(G.boardClass);
+      document.body.classList.remove(G.boardClass);
+    }
+    el.board.classList.add(cls);
+    document.body.classList.add(cls);
+    G.boardClass = cls;
+
     document.body.classList.toggle('no-anim', !G.settings.animations);
     el.board.classList.toggle('board--coords', !!G.settings.coordinates);
     paintSquares();
@@ -195,6 +249,12 @@ window.WarGame = window.WarGame || {};
     for (var i = 0; i < nodes.length; i++) {
       nodes[i].textContent = t(nodes[i].getAttribute('data-i18n'));
     }
+    var titled = document.querySelectorAll('[data-i18n-title]');
+    for (var k = 0; k < titled.length; k++) {
+      var s = t(titled[k].getAttribute('data-i18n-title'));
+      titled[k].setAttribute('title', s);
+      titled[k].setAttribute('aria-label', s);
+    }
 
     var btns = document.querySelectorAll('.lang-btn');
     for (var j = 0; j < btns.length; j++) {
@@ -202,31 +262,91 @@ window.WarGame = window.WarGame || {};
     }
 
     renderPresets();
+    renderThemes();
     renderRules();
     renderMenu();
-    /* the two live lines hold a sentence written in the old language */
+    /* the live lines hold a sentence written in the old language */
     msg('');
     transferMsg('');
-    if (G.state) { renderPanel(); renderPieces(); renderMarks(); }
-    if (!el.overMerge.hidden) renderMergeDialog();
-    if (!el.overOver.hidden) renderOver();
+    renderPieces();
+    if (G.state) { renderPanel(); renderMarks(); }
+    if (isOpen('merge')) renderMergeDialog();
+    if (isOpen('over')) renderOver();
+    if (isOpen('invite')) { renderInvite(); inviteMsg(''); }
   }
 
-  /* --------------------------------------------------------- screens ---- */
+  /* --------------------------------------------------------- overlays --- */
 
-  function show(name) {
-    var screens = ['menu', 'game', 'rules', 'settings'];
-    for (var i = 0; i < screens.length; i++) {
-      $('screen-' + screens[i]).classList.toggle('is-active', screens[i] === name);
-    }
-    if (name === 'menu') renderMenu();
-    if (name === 'settings') fillSettingsForm();
-    measure();
-    requestAnimationFrame(measure);
+  function ov(name) { return $('ov-' + name); }
+
+  /* an overlay on its way out is already closed: the board takes taps again
+     as soon as the closing starts, not when the fade ends */
+  function isOpen(name) {
+    var n = ov(name);
+    return !!n && !n.hidden && n.classList.contains('is-open');
+  }
+
+  function openOv(name) {
+    var n = ov(name);
+    if (!n) return;
+    if (n._timer) { clearTimeout(n._timer); n._timer = null; }
+    n.hidden = false;
+    void n.offsetWidth;          /* so the transition starts from the closed look */
+    n.classList.add('is-open');
+    document.body.classList.add('has-overlay');
+    menuUnder();
+  }
+
+  /* the menu card steps back while a sheet, a drawer or a dialog is over it,
+     and comes back when that one closes */
+  function menuUnder() {
+    var m = ov('menu');
+    if (!m) return;
+    var others = ['rules', 'settings', 'invite', 'merge', 'over'];
+    var on = false;
+    for (var i = 0; i < others.length; i++) if (isOpen(others[i])) on = true;
+    m.classList.toggle('is-under', on);
+  }
+
+  function closeOv(name) {
+    var n = ov(name);
+    if (!n || n.hidden) return;
+    n.classList.remove('is-open');
+    menuUnder();
+    n._timer = setTimeout(function () {
+      n.hidden = true;
+      n._timer = null;
+      if (!anyOverlayOpen()) document.body.classList.remove('has-overlay');
+    }, 230);
+  }
+
+  function anyOverlayOpen() {
+    var names = ['menu', 'rules', 'settings', 'invite', 'merge', 'over'];
+    for (var i = 0; i < names.length; i++) if (isOpen(names[i])) return true;
+    return false;
+  }
+
+  /* --------------------------------------------------------- the menu --- */
+
+  function gameInProgress() {
+    return !!(G.state && G.state.winner === null) || hasSavedGame();
   }
 
   function renderMenu() {
-    el.btnContinue.hidden = !hasSavedGame();
+    el.btnResume.hidden = !gameInProgress();
+  }
+
+  function openMenu() {
+    showConfirm(false);
+    renderMenu();
+    openOv('menu');
+  }
+
+  function closeMenu() { closeOv('menu'); }
+
+  function showConfirm(on) {
+    el.menuButtons.hidden = !!on;
+    el.menuConfirm.hidden = !on;
   }
 
   /* ------------------------------------------------------- the layout --- */
@@ -237,6 +357,11 @@ window.WarGame = window.WarGame || {};
     root.style.setProperty('--vw', window.innerWidth + 'px');
     var w = el.board.clientWidth;
     if (w > 0) root.style.setProperty('--sq', (w / 8) + 'px');
+  }
+
+  function remeasure() {
+    measure();
+    requestAnimationFrame(measure);
   }
 
   /* ------------------------------------------------------- the squares -- */
@@ -277,9 +402,14 @@ window.WarGame = window.WarGame || {};
 
   /* -------------------------------------------------------- the pieces -- */
 
+  /* the board is never empty: with no game it shows the opening position */
+  function viewState() { return G.state || G.idle; }
+
   function renderPieces() {
-    var st = G.state, id, p;
+    var st = viewState(), id, p;
     if (!st) return;
+    var live = st === G.state;
+    var theme = currentTheme();
     var seen = {};
     for (id in st.pieces) {
       p = st.pieces[id];
@@ -292,10 +422,17 @@ window.WarGame = window.WarGame || {};
         el.pieces.appendChild(node);
       }
       node.style.opacity = '';
+      node.style.transitionDuration = '';
       node.style.transform = tf(p.row, p.col);
-      node.classList.toggle('pc--used', isUsed(st, id));
+      var fireLeft = live && Engine.canFireAgain(st, id);
+      node.classList.toggle('pc--used', live && isUsed(st, id) && !fireLeft);
+      node.classList.toggle('pc--fire', !!fireLeft);
+      node.classList.toggle('pc--sel', live && G.sel === id);
+      var s = Engine.pieceStats(p);
       node.innerHTML = Icons.piece(p.kinds, {
-        owner: p.owner, str: p.str, maxStr: p.maxStr
+        owner: p.owner, theme: theme,
+        hp: p.hp, maxHp: s.maxHp, str: s.str,
+        fireLeft: fireLeft
       });
     }
     for (id in pieceEls) {
@@ -316,12 +453,13 @@ window.WarGame = window.WarGame || {};
 
   function chip(kind, dim) {
     return '<span class="chip' + (dim ? ' chip--dim' : '') + '">' +
-      '<span class="chip-ico">' + Icons.glyph(kind) + '</span>' +
-      '<span>' + t('kind.' + kind) + '</span></span>';
+      '<span class="chip-ico">' + Icons.glyph(kind, { theme: currentTheme() }) + '</span>' +
+      '<span>' + esc(t('kind.' + kind)) + '</span></span>';
   }
 
   function renderPanel() {
     var st = G.state;
+    el.panel.hidden = !st;
     if (!st) return;
     var pl = st.turn.player;
 
@@ -334,7 +472,7 @@ window.WarGame = window.WarGame || {};
     var used = Engine.usedKinds(st) || [];
     el.comboUsed.innerHTML = used.length
       ? used.map(function (k) { return chip(k); }).join('')
-      : '<span class="chip chip--dim">' + t('panel.nothing') + '</span>';
+      : '<span class="chip chip--dim">' + esc(t('panel.nothing')) + '</span>';
 
     var avail = [];
     if (st.winner === null && !st.pendingMerge) {
@@ -343,7 +481,7 @@ window.WarGame = window.WarGame || {};
     }
     el.comboAvail.innerHTML = avail.length
       ? avail.map(function (k) { return chip(k); }).join('')
-      : '<span class="chip chip--dim">' + t('panel.nothing') + '</span>';
+      : '<span class="chip chip--dim">' + esc(t('panel.nothing')) + '</span>';
 
     var canHeal = !!(G.sel && hasAct('heal'));
     el.btnHeal.hidden = !canHeal;
@@ -363,8 +501,8 @@ window.WarGame = window.WarGame || {};
   function select(id) {
     G.sel = id;
     G.acts = Engine.legalActions(G.state, id) || [];
-    msg('');
     renderMarks();
+    renderPieces();
     renderPanel();
   }
 
@@ -372,6 +510,7 @@ window.WarGame = window.WarGame || {};
     G.sel = null;
     G.acts = [];
     renderMarks();
+    renderPieces();
     renderPanel();
   }
 
@@ -405,7 +544,9 @@ window.WarGame = window.WarGame || {};
     if (st.winner === null && !st.pendingMerge && !G.busy) {
       var mine = Engine.piecesOf(st, st.turn.player) || [];
       for (var m = 0; m < mine.length; m++) {
-        if (Engine.canActivate(st, mine[m].id) || Engine.canHeal(st, mine[m].id)) {
+        var pid = mine[m].id;
+        if (Engine.canActivate(st, pid) || Engine.canHeal(st, pid) ||
+            Engine.canFireAgain(st, pid)) {
           sqNode(mine[m].row, mine[m].col).classList.add('sq--act');
         }
       }
@@ -426,13 +567,13 @@ window.WarGame = window.WarGame || {};
         var f = st.pieces[act.target];
         if (f) {
           var fm = markNode(f.row, f.col, 'mark--fire',
-            '<span class="bowmark">' + Icons.glyph('A') + '</span>');
-          /* the bow takes the tap of its own, so a square that is both an
+            '<span class="bowmark">' + Icons.bowMark + '</span>');
+          /* the bow takes a tap of its own, so a square that is both an
              attack and a fire target still offers the two */
           bindFire(fm.firstChild, act.target);
         }
       } else if (act.type === 'heal' && me) {
-        var b = make('button', 'heal-btn', '<span>' + t('action.heal') + '</span>');
+        var b = make('button', 'heal-btn', '<span>' + esc(t('action.heal')) + '</span>');
         b.type = 'button';
         b.style.transform = tf(me.row, me.col);
         b.addEventListener('click', function (e) {
@@ -483,7 +624,7 @@ window.WarGame = window.WarGame || {};
 
   function onSquare(row, col) {
     var st = G.state;
-    if (!st || G.busy || st.winner !== null) return;
+    if (!st || G.busy || st.winner !== null || anyOverlayOpen()) return;
     if (st.pendingMerge) { msg(t('msg.pending')); return; }
 
     if (G.sel) {
@@ -496,7 +637,7 @@ window.WarGame = window.WarGame || {};
     if (p.id === G.sel) { deselect(); return; }
 
     var acts = Engine.legalActions(st, p.id) || [];
-    if (acts.length) { select(p.id); }
+    if (acts.length) { msg(''); select(p.id); }
     else { deselect(); msg(whyNot(p)); }
   }
 
@@ -527,19 +668,29 @@ window.WarGame = window.WarGame || {};
       G.busy = false;
       render();
       autosave();
-      afterAction(res.events || []);
+      afterAction(res.events || [], action);
     });
   }
 
-  function afterAction(events) {
+  function afterAction(events, action) {
     var st = G.state;
+    var line = '';
     for (var i = 0; i < events.length; i++) {
       if (events[i].type === 'pass') {
-        msg(t('msg.pass', { name: t('player.' + events[i].player) }));
+        line = t('msg.pass', { name: t('player.' + events[i].player) });
       }
     }
-    if (st.winner !== null) { openOver(); return; }
-    if (st.pendingMerge) openMerge();
+    if (st.winner !== null) { msg(line); openOver(); return; }
+    if (st.pendingMerge) { msg(line); openMerge(); return; }
+
+    /* a firing piece that took a single step keeps its shot: it stays
+       selected with its targets on, and the panel says so */
+    if (action && action.type === 'move' && Engine.canFireAgain(st, action.piece)) {
+      select(action.piece);
+      msg(t('msg.mayFire'));
+      return;
+    }
+    msg(line);
   }
 
   function endTurn() {
@@ -556,7 +707,7 @@ window.WarGame = window.WarGame || {};
     msg('');
     render();
     autosave();
-    if (G.state.pendingMerge) openMerge(); else closeMerge();
+    if (G.state.pendingMerge) openMerge(); else closeOv('merge');
   }
 
   function render() {
@@ -566,7 +717,29 @@ window.WarGame = window.WarGame || {};
     measure();
   }
 
-  /* ------------------------------------------------------ animations ---- */
+  /* =====================================================================
+     EFFECTS (the animations)
+     Each effect is one small function over the events of Engine.apply and
+     its own block of CSS (see EFFECTS in style.css). Input is blocked
+     while they run; with the animations setting off, or under
+     prefers-reduced-motion, every wait is zero and nothing is drawn.
+
+     No single action runs longer than about 600 ms: a move is 300, a shot
+     460, a blow 420 and the death that may follow it 200, so a turn on an
+     iPad never waits for the screen. The colors of the sparks and of the
+     fragments come from FX_TONE, one entry per theme.
+     ===================================================================== */
+
+  /* the spark and clash colors of each theme; classic is the fallback */
+  var FX_TONE = {
+    classic:  { spark: ['#ffe9a8', '#ffd066', '#fff6df'], merge: ['#ffd782', '#fff2cf'] },
+    heraldic: { spark: ['#ffe2a6', '#e8b44f', '#fff4dc'], merge: ['#eec87a', '#fff1d2'] },
+    ink:      { spark: ['#2b2c31', '#5d5e64', '#111216'], merge: ['#3a3b41', '#8d8e94'] },
+    neon:     { spark: ['#b9fbff', '#37f0ff', '#ff4fd8'], merge: ['#37f0ff', '#ff4fd8'] },
+    toy:      { spark: ['#fff3c4', '#ff9f1c', '#ff6b8a'], merge: ['#ffd36e', '#7ee0ff'] }
+  };
+
+  function tone() { return FX_TONE[currentTheme()] || FX_TONE.classic; }
 
   function fxAdd(node, life) {
     el.fx.appendChild(node);
@@ -576,13 +749,20 @@ window.WarGame = window.WarGame || {};
     return node;
   }
 
+  function setPos(id, row, col) {
+    var node = pieceEls[id];
+    if (node) node.style.transform = tf(row, col);
+  }
+
+  /* floating numbers ---------------------------------------------------- */
+
   function floatText(row, col, text, cls) {
     if (!animOn()) return;
     var c = centerPx(row, col);
-    var n = make('div', 'float ' + (cls || ''), text);
+    var n = make('div', 'float ' + (cls || ''), esc(text));
     n.style.left = c.x + 'px';
-    n.style.top = (c.y - c.s * 0.15) + 'px';
-    fxAdd(n, 820);
+    n.style.top = (c.y - c.s * 0.16) + 'px';
+    fxAdd(n, 760);
   }
 
   function floatLoss(row, col, loss) {
@@ -590,41 +770,146 @@ window.WarGame = window.WarGame || {};
     floatText(row, col, '−' + fmt(loss), 'float--loss');
   }
 
-  function flashSquare(row, col) {
+  /* sparks, bursts, flashes and shakes ----------------------------------- */
+
+  function sparks(x, y, n, colors, spread, life) {
     if (!animOn()) return;
-    var n = make('div', 'hitflash');
-    n.style.transform = tf(row, col);
-    fxAdd(n, 340);
+    for (var i = 0; i < n; i++) {
+      var ang = (Math.PI * 2 * i) / n + Math.random() * 0.7;
+      var dist = spread * (0.5 + Math.random() * 0.65);
+      var s = make('div', 'spark');
+      s.style.left = x + 'px';
+      s.style.top = y + 'px';
+      s.style.color = colors[i % colors.length];       /* the glow follows it */
+      s.style.background = colors[i % colors.length];
+      s.style.setProperty('--dx', (Math.cos(ang) * dist) + 'px');
+      s.style.setProperty('--dy', (Math.sin(ang) * dist) + 'px');
+      fxAdd(s, life || 520);
+    }
   }
 
-  function setPos(id, row, col) {
-    var node = pieceEls[id];
-    if (node) node.style.transform = tf(row, col);
+  function clash(x, y) {
+    if (!animOn()) return;
+    var n = make('div', 'clash');
+    n.style.left = x + 'px';
+    n.style.top = y + 'px';
+    fxAdd(n, 380);
+    sparks(x, y, 8, tone().spark, el.board.clientWidth / 8 * 0.55, 500);
   }
+
+  function burst(x, y) {
+    if (!animOn()) return;
+    var n = make('div', 'burst');
+    n.style.left = x + 'px';
+    n.style.top = y + 'px';
+    fxAdd(n, 360);
+  }
+
+  /* the square that was hit flashes under the piece standing on it */
+  function flash(x, y) {
+    if (!animOn()) return;
+    var n = make('div', 'flash');
+    n.style.left = x + 'px';
+    n.style.top = y + 'px';
+    fxAdd(n, 280);
+  }
+
+  function shake(id) {
+    if (!animOn()) return;
+    var node = pieceEls[id];
+    if (!node) return;
+    node.classList.remove('pc--shake');
+    void node.offsetWidth;
+    node.classList.add('pc--shake');
+    setTimeout(function () { node.classList.remove('pc--shake'); }, 300);
+  }
+
+  /* move: one square at a time, faster the longer the path --------------- */
 
   async function animMove(ev) {
-    setPos(ev.id, ev.to.row, ev.to.col);
-    await wait(280);
+    var node = pieceEls[ev.id];
+    if (!animOn() || !node) { setPos(ev.id, ev.to.row, ev.to.col); return; }
+    var path = (ev.path && ev.path.length) ? ev.path : [ev.to];
+    var per = Math.max(72, Math.round(300 / path.length));
+    node.classList.add('pc--moving');
+    for (var i = 0; i < path.length; i++) {
+      node.style.transitionDuration = per + 'ms';
+      node.style.transform = tf(path[i].row, path[i].col);
+      await wait(per);
+    }
+    node.style.transitionDuration = '';
+    node.classList.remove('pc--moving');
   }
+
+  /* attack: the walk, the lunge, the clash, the losses -------------------- */
 
   async function animAttack(ev, after) {
     var node = pieceEls[ev.attacker];
-    if (node) {
-      var r = ev.from.row + (ev.to.row - ev.from.row) * 0.55;
-      var c = ev.from.col + (ev.to.col - ev.from.col) * 0.55;
+    var path = (ev.path && ev.path.length) ? ev.path : [ev.to];
+    if (animOn() && node) {
+      node.classList.add('pc--moving');
+      var per = Math.max(72, Math.round(300 / path.length));
+      for (var i = 0; i < path.length - 1; i++) {   /* the last square is the enemy */
+        node.style.transitionDuration = per + 'ms';
+        node.style.transform = tf(path[i].row, path[i].col);
+        await wait(per);
+      }
+      node.classList.remove('pc--moving');
+      /* the lunge: two thirds of the way into the defender's square */
+      var last = path.length > 1 ? path[path.length - 2] : ev.from;
+      var r = last.row + (ev.to.row - last.row) * 0.62;
+      var c = last.col + (ev.to.col - last.col) * 0.62;
+      node.style.transition = 'transform 95ms cubic-bezier(0.5, 0, 0.9, 0.4)';
       node.style.transform = 'translate(' + (c * 100) + '%, ' + ((7 - r) * 100) + '%)';
+      await wait(100);
+      var mid = centerPx((last.row + ev.to.row) / 2, (last.col + ev.to.col) / 2);
+      var hit = centerPx(ev.to.row, ev.to.col);
+      clash(mid.x, mid.y);
+      flash(hit.x, hit.y);
+      shake(ev.defender || ev.target);
     }
-    await wait(170);
     floatLoss(ev.to.row, ev.to.col, ev.defenderLoss);
     floatLoss(ev.from.row, ev.from.col, ev.attackerLoss);
-    await wait(170);
+    await wait(165);
+    /* the survivor settles back, with a little bounce at the end */
     var alive = after.pieces[ev.attacker];
     if (node) {
-      if (alive) node.style.transform = tf(alive.row, alive.col);
-      else node.style.transform = tf(ev.from.row, ev.from.col);
+      node.style.transition = 'transform 155ms cubic-bezier(0.25, 1.35, 0.5, 1)';
+      node.style.transform = alive ? tf(alive.row, alive.col) : tf(ev.from.row, ev.from.col);
     }
     await wait(160);
+    if (node) { node.style.transition = ''; node.style.transitionDuration = ''; }
   }
+
+  /* death: six to eight fragments that fly, tumble and fade --------------- */
+
+  async function animDie(ev) {
+    var node = pieceEls[ev.id];
+    if (animOn()) {
+      var c = centerPx(ev.at.row, ev.at.col);
+      var n = 6 + Math.floor(Math.random() * 3);
+      var color = playerColor(ev.owner);
+      for (var i = 0; i < n; i++) {
+        var f = make('div', 'frag');
+        var ang = (Math.PI * 2 * i) / n + Math.random() * 0.5;
+        f.style.left = (c.x + Math.cos(ang) * c.s * 0.16) + 'px';
+        f.style.top = (c.y + Math.sin(ang) * c.s * 0.16) + 'px';
+        f.style.background = color;
+        f.style.setProperty('--dx', (Math.cos(ang) * c.s * (0.34 + Math.random() * 0.45)) + 'px');
+        f.style.setProperty('--dy', (c.s * (0.5 + Math.random() * 0.55)) + 'px');
+        f.style.setProperty('--rot', Math.round(-220 + Math.random() * 440) + 'deg');
+        f.style.setProperty('--fs', (c.s * (0.12 + Math.random() * 0.11)) + 'px');
+        fxAdd(f, 640);
+      }
+    }
+    if (node) {
+      node.style.transitionDuration = '150ms';
+      node.style.opacity = '0';
+    }
+    await wait(200);
+  }
+
+  /* fire: an arrow along the row or the column, with a little arc --------- */
 
   async function animFire(ev, before) {
     var sh = before.pieces[ev.shooter];
@@ -633,27 +918,51 @@ window.WarGame = window.WarGame || {};
     if (animOn()) {
       var a = centerPx(sh.row, sh.col), b = centerPx(tg.row, tg.col);
       var dx = b.x - a.x, dy = b.y - a.y;
-      var n = make('div', 'shot');
-      n.style.left = a.x + 'px';
-      n.style.top = a.y + 'px';
-      n.style.width = Math.sqrt(dx * dx + dy * dy) + 'px';
-      n.style.setProperty('--ang', Math.atan2(dy, dx) + 'rad');
-      fxAdd(n, 420);
+      var len = Math.sqrt(dx * dx + dy * dy) || 1;
+      var ang = Math.atan2(dy, dx) * 180 / Math.PI;
+      /* the arc lifts the flight off the straight line, across the shot */
+      var lift = Math.min(a.s * 0.62, len * 0.2);
+      var mx = (a.x + b.x) / 2 + (-dy / len) * lift;
+      var my = (a.y + b.y) / 2 + (dx / len) * lift;
+      /* it starts short of the shooter and stops short of the target */
+      var sx = a.x + (dx / len) * a.s * 0.3, sy = a.y + (dy / len) * a.s * 0.3;
+      var ex = b.x - (dx / len) * a.s * 0.16, ey = b.y - (dy / len) * a.s * 0.16;
+
+      var w = Math.max(20, a.s * 0.66), h = Math.max(8, a.s * 0.24);
+      var n = make('div', 'arrow', arrowSVG());
+      n.style.width = w + 'px';
+      n.style.height = h + 'px';
+      n.style.marginLeft = (-w / 2) + 'px';
+      n.style.marginTop = (-h / 2) + 'px';
+      n.style.setProperty('--x0', sx + 'px');
+      n.style.setProperty('--y0', sy + 'px');
+      n.style.setProperty('--xm', mx + 'px');
+      n.style.setProperty('--ym', my + 'px');
+      n.style.setProperty('--x1', ex + 'px');
+      n.style.setProperty('--y1', ey + 'px');
+      n.style.setProperty('--ang', ang + 'deg');
+      fxAdd(n, 380);
+      await wait(275);
+      burst(b.x, b.y);
+      flash(b.x, b.y);
+      sparks(b.x, b.y, 5, tone().spark, a.s * 0.4, 440);
+      shake(ev.target);
     }
-    await wait(260);
-    flashSquare(tg.row, tg.col);
     floatLoss(tg.row, tg.col, ev.damage);
-    await wait(200);
+    await wait(185);
   }
 
-  async function animDie(ev) {
-    var node = pieceEls[ev.id];
-    if (node) {
-      node.style.transform = node.style.transform + ' scale(0.15)';
-      node.style.opacity = '0';
-    }
-    await wait(220);
+  function arrowSVG() {
+    return '<svg viewBox="0 0 64 22" xmlns="http://www.w3.org/2000/svg" ' +
+      'focusable="false" aria-hidden="true">' +
+      '<path d="M4 11 H50" stroke="#c98b3a" stroke-width="3" stroke-linecap="round"/>' +
+      '<path d="M64 11 L48 5.5 L51 11 L48 16.5 Z" fill="#dfe4ea"/>' +
+      '<path d="M4 11 L14 4 L12 11 L14 18 Z" fill="#e9dcc3"/>' +
+      '<path d="M10 11 L19 5.5 L17.5 11 L19 16.5 Z" fill="#c4553f"/>' +
+      '</svg>';
   }
+
+  /* heal: a pulse, three sparkles and the number ------------------------- */
 
   async function animHeal(ev, after) {
     var p = after.pieces[ev.id];
@@ -665,42 +974,55 @@ window.WarGame = window.WarGame || {};
       n.style.top = (c.y - c.s * 0.45) + 'px';
       n.style.width = (c.s * 0.9) + 'px';
       n.style.height = (c.s * 0.9) + 'px';
-      fxAdd(n, 600);
+      fxAdd(n, 540);
+      for (var i = 0; i < 3; i++) {
+        var s = make('div', 'sparkle');
+        s.style.left = (c.x + (i - 1) * c.s * 0.26) + 'px';
+        s.style.top = (c.y + c.s * 0.12) + 'px';
+        s.style.animationDelay = (i * 75) + 'ms';
+        fxAdd(s, 760);
+      }
       floatText(p.row, p.col, '+' + fmt(ev.amount), 'float--heal');
     }
     await wait(320);
   }
 
+  /* merge: a burst and the new glyph scaling in -------------------------- */
+
   async function animMerge(ev, after) {
     var p = after.pieces[ev.id];
     if (!p) return;
+    var node = pieceEls[ev.id];
     if (animOn()) {
       var c = centerPx(p.row, p.col);
-      for (var i = 0; i < 14; i++) {
-        var ang = (Math.PI * 2 * i) / 14 + Math.random() * 0.4;
-        var dist = c.s * (0.4 + Math.random() * 0.45);
-        var n = make('div', 'spark');
-        n.style.left = c.x + 'px';
-        n.style.top = c.y + 'px';
-        n.style.background = i % 2 ? playerColor(p.owner) : '#ffd782';
-        n.style.setProperty('--dx', (Math.cos(ang) * dist) + 'px');
-        n.style.setProperty('--dy', (Math.sin(ang) * dist) + 'px');
-        fxAdd(n, 600);
+      var cols = [playerColor(p.owner)].concat(tone().merge);
+      sparks(c.x, c.y, 15, cols, c.s * 0.85, 560);
+      flash(c.x, c.y);
+      if (node) {
+        var s = Engine.pieceStats(p);
+        node.innerHTML = Icons.piece(p.kinds, {
+          owner: p.owner, theme: currentTheme(),
+          hp: p.hp, maxHp: s.maxHp, str: s.str
+        });
+        node.classList.add('pc--pop');
+        setTimeout(function () { node.classList.remove('pc--pop'); }, 430);
       }
     }
     await wait(340);
   }
 
-  async function animBanner(player) {
+  /* turn change: a ribbon in the new player's color ---------------------- */
+
+  async function animRibbon(player) {
     if (!animOn()) return;
     var color = playerColor(player);
-    el.banner.textContent = t('player.' + player);
-    el.banner.style.background = color;
-    el.banner.style.color = outlineFor(color);
-    el.banner.classList.remove('is-on');
-    void el.banner.offsetWidth;
-    el.banner.classList.add('is-on');
-    await wait(520);
+    el.ribbon.firstChild.textContent = t('player.' + player);
+    el.ribbon.style.background = color;
+    el.ribbon.style.color = outlineFor(color);
+    el.ribbon.classList.remove('is-on');
+    void el.ribbon.offsetWidth;
+    el.ribbon.classList.add('is-on');
+    await wait(460);
   }
 
   async function playEvents(events, before, after) {
@@ -713,7 +1035,7 @@ window.WarGame = window.WarGame || {};
         case 'die': await animDie(ev); break;
         case 'heal': await animHeal(ev, after); break;
         case 'merge': await animMerge(ev, after); break;
-        case 'turnStart': await animBanner(ev.player); break;
+        case 'turnStart': await animRibbon(ev.player); break;
         default: break;
       }
     }
@@ -721,21 +1043,25 @@ window.WarGame = window.WarGame || {};
 
   /* ---------------------------------------------------- merge dialog ---- */
 
-  function baseOf(kind) { return Engine.KINDS[kind]; }
-
+  /* the stats of the hybrid the choice would make, by the version 2 rule */
   function mergedStats(piece, kind) {
-    var own = baseOf(piece.kinds[0]), add = baseOf(kind);
+    var own = Engine.KINDS[piece.kinds[0]], add = Engine.KINDS[kind];
+    var maxHp = own.hp + add.hp;
+    var hp = piece.hp + add.hp;
+    var baseStr = own.str + add.str;
     return {
-      maxStr: own.str + add.str,
-      str: piece.str + add.str,
+      hp: hp,
+      maxHp: maxHp,
+      str: Math.min(hp, baseStr),
       move: Math.max(own.move, add.move),
       fire: own.fire + add.fire,
-      range: own.range + add.range
+      range: Math.max(own.range, add.range)
     };
   }
 
   function statLine(s) {
-    var out = t('stat.str') + ' <bdi>' + fmt(s.str) + '/' + fmt(s.maxStr) + '</bdi>' +
+    var out = t('stat.hp') + ' <bdi>' + fmt(s.hp) + '/' + fmt(s.maxHp) + '</bdi>' +
+      '<br>' + t('stat.str') + ' <bdi>' + fmt(s.str) + '</bdi>' +
       '<br>' + t('stat.move') + ' <bdi>' + s.move + '</bdi>';
     if (s.fire > 0) {
       out += '<br>' + t('stat.fire') + ' <bdi>' + s.fire + '</bdi> · ' +
@@ -748,15 +1074,17 @@ window.WarGame = window.WarGame || {};
     var st = G.state;
     var p = st && st.pendingMerge ? st.pieces[st.pendingMerge] : null;
     if (!p) return;
+    var s = Engine.pieceStats(p);
     el.mergePiece.innerHTML = Icons.piece(p.kinds, {
-      owner: p.owner, str: p.str, maxStr: p.maxStr
+      owner: p.owner, theme: currentTheme(),
+      hp: p.hp, maxHp: s.maxHp, str: s.str
     });
     var html = '';
     for (var i = 0; i < KIND_ORDER.length; i++) {
       var k = KIND_ORDER[i];
       html += '<button type="button" class="merge-choice" data-kind="' + k + '">' +
-        '<span class="chip-ico">' + Icons.glyph(k) + '</span>' +
-        '<span class="merge-name">' + t('kind.' + k) + '</span>' +
+        '<span class="chip-ico">' + Icons.glyph(k, { theme: currentTheme() }) + '</span>' +
+        '<span class="merge-name">' + esc(t('kind.' + k)) + '</span>' +
         '<span class="merge-stats">' + statLine(mergedStats(p, k)) + '</span>' +
         '</button>';
     }
@@ -765,10 +1093,8 @@ window.WarGame = window.WarGame || {};
 
   function openMerge() {
     renderMergeDialog();
-    el.overMerge.hidden = false;
+    openOv('merge');
   }
-
-  function closeMerge() { el.overMerge.hidden = true; }
 
   /* ------------------------------------------------------- game over ---- */
 
@@ -786,10 +1112,8 @@ window.WarGame = window.WarGame || {};
 
   function openOver() {
     renderOver();
-    el.overOver.hidden = false;
+    openOv('over');
   }
-
-  function closeOver() { el.overOver.hidden = true; }
 
   /* ----------------------------------------------------- persistence ---- */
 
@@ -804,14 +1128,14 @@ window.WarGame = window.WarGame || {};
     try { return localStorage.getItem(GAME_KEY); } catch (e) { return null; }
   }
 
+  /* a version 1 code no longer deserializes, so it counts as no save */
   function hasSavedGame() {
     var c = savedCode();
     if (!c) return false;
     try { Engine.deserialize(c); return true; } catch (e) { return false; }
   }
 
-  function startGame(state) {
-    G.state = state;
+  function resetBoardNodes() {
     G.history = [];
     G.sel = null;
     G.acts = [];
@@ -820,30 +1144,51 @@ window.WarGame = window.WarGame || {};
     clearNode(el.pieces);
     clearNode(el.fx);
     clearNode(el.marks);
-    closeMerge();
-    closeOver();
+  }
+
+  /* the board with no game on it: the opening position, dimmed */
+  function showIdleBoard() {
+    G.state = null;
+    G.idle = Engine.newGame({ diagonalMoves: !!G.settings.diagonalMoves }, 0);
+    resetBoardNodes();
+    document.body.classList.add('no-game');
+    el.panel.hidden = true;
     msg('');
-    show('game');
     render();
+  }
+
+  function startGame(state) {
+    G.state = state;
+    resetBoardNodes();
+    document.body.classList.remove('no-game');
+    el.panel.hidden = false;
+    closeOv('merge');
+    closeOv('over');
+    closeMenu();
+    msg('');
+    render();
+    remeasure();
     autosave();
     if (G.state.winner !== null) openOver();
     else if (G.state.pendingMerge) openMerge();
   }
 
   function newGame() {
-    var st = Engine.newGame({
-      diagonalFire: !!G.settings.diagonalFire,
-      knightsJump: !!G.settings.knightsJump
-    });
+    var st = Engine.newGame({ diagonalMoves: !!G.settings.diagonalMoves });
     startGame(st);
     msg(t('msg.start', { name: t('player.' + st.turn.player) }));
     G.busy = true;
-    animBanner(st.turn.player).then(function () { G.busy = false; renderMarks(); renderPanel(); });
+    animRibbon(st.turn.player).then(function () {
+      G.busy = false;
+      renderMarks();
+      renderPanel();
+    });
   }
 
-  function continueGame() {
+  function resumeGame() {
+    if (G.state) { closeMenu(); return; }
     var c = savedCode();
-    if (!c) return;
+    if (!c) { renderMenu(); return; }
     try { startGame(Engine.deserialize(c)); }
     catch (e) { renderMenu(); }
   }
@@ -866,38 +1211,40 @@ window.WarGame = window.WarGame || {};
     } catch (e) { return false; }
   }
 
+  /* --------------------------------------------------------- transfer --- */
+
   function transferMsg(text) { el.transferMsg.textContent = text || ''; }
 
   function doExport() {
-    var code = null;
-    if (G.state) code = Engine.serialize(G.state);
-    else code = savedCode();
+    var code = G.state ? Engine.serialize(G.state) : savedCode();
     if (!code) { transferMsg(t('settings.noGame')); return; }
     el.exportCode.value = code;
     copyExport();
   }
 
+  function copyText(text, onOk, onFail) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(onOk, onFail);
+      return;
+    }
+    onFail();
+  }
+
   function copyExport() {
     var code = el.exportCode.value;
     if (!code) { transferMsg(t('settings.noGame')); return; }
-    var done = function () { transferMsg(t('settings.copied')); };
-    var failed = function () {
-      el.exportCode.focus();
-      el.exportCode.select();
-      transferMsg(t('settings.copyFail'));
-    };
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(code).then(done, function () {
-        if (!legacyCopy()) failed(); else done();
+    copyText(code,
+      function () { transferMsg(t('settings.copied')); },
+      function () {
+        if (legacyCopy(el.exportCode)) transferMsg(t('settings.copied'));
+        else transferMsg(t('settings.copyFail'));
       });
-    } else if (legacyCopy()) done();
-    else failed();
   }
 
-  function legacyCopy() {
+  function legacyCopy(node) {
     try {
-      el.exportCode.focus();
-      el.exportCode.select();
+      node.focus();
+      node.select();
       return document.execCommand('copy');
     } catch (e) { return false; }
   }
@@ -909,6 +1256,7 @@ window.WarGame = window.WarGame || {};
     try { st = Engine.deserialize(code); }
     catch (e) { transferMsg(t('settings.importBad')); return; }
     transferMsg(t('settings.imported'));
+    closeOv('settings');
     startGame(st);
   }
 
@@ -927,21 +1275,97 @@ window.WarGame = window.WarGame || {};
     }
   }
 
+  /* ----------------------------------------------------------- invite --- */
+
+  function inviteText(mode) {
+    if (mode === 'game' && G.state) {
+      return t('invite.gameWhat') + '\n' +
+        GAME_URL + '#g=' + Engine.serialize(G.state) + '\n' +
+        t('invite.howTo');
+    }
+    return t('invite.what') + '\n' + GAME_URL + '\n' + t('invite.howTo');
+  }
+
+  function renderInvite() {
+    var gameOn = !!(G.state && G.state.winner === null);
+    if (!gameOn) G.inviteMode = 'app';
+    el.inviteGame.hidden = !gameOn;
+    el.inviteGame.classList.toggle('is-on', G.inviteMode === 'game');
+    /* the link is one run of Latin: a bdi keeps its last slash from jumping
+       to the head of the line in Hebrew */
+    el.inviteText.innerHTML = inviteText(G.inviteMode).split('\n')
+      .map(function (line, i) {
+        return i === 1 ? '<bdi dir="ltr">' + esc(line) + '</bdi>' : esc(line);
+      }).join('\n');
+    el.inviteCopy.textContent = canShare() ? t('game.share') : t('invite.copy');
+  }
+
+  function canShare() { return typeof navigator.share === 'function'; }
+
+  function openInvite() {
+    G.inviteMode = 'app';
+    renderInvite();
+    inviteMsg('');
+    /* with no share sheet the text is on the clipboard as soon as the card
+       opens, so one tap is enough */
+    if (!canShare()) copyInvite(true);
+    openOv('invite');
+  }
+
+  function inviteMsg(text) { el.inviteMsg.textContent = text || ''; }
+
+  function copyInvite(quiet) {
+    var text = inviteText(G.inviteMode);
+    copyText(text,
+      function () { inviteMsg(t('invite.copied')); },
+      function () {
+        if (quiet) return;
+        selectNode(el.inviteText);   /* so it can still be copied by hand */
+        inviteMsg(t('invite.copyFail'));
+      });
+  }
+
+  function selectNode(node) {
+    try {
+      var sel = window.getSelection();
+      var range = document.createRange();
+      range.selectNodeContents(node);
+      sel.removeAllRanges();
+      sel.addRange(range);
+    } catch (e) { /* selection is a courtesy, not a need */ }
+  }
+
+  function shareInvite() {
+    var text = inviteText(G.inviteMode);
+    if (canShare()) {
+      try {
+        var p = navigator.share({ title: t('app.title'), text: text });
+        if (p && p.catch) p.catch(function () { /* the sheet was dismissed */ });
+      } catch (e) { copyInvite(); }
+      return;
+    }
+    copyInvite();
+  }
+
   /* ----------------------------------------------------- rules screen --- */
 
   function pieceTableHTML() {
-    var head = '<tr><th>' + t('stat.piece') + '</th><th class="num">' + t('stat.str') +
-      '</th><th class="num">' + t('stat.move') + '</th><th class="num">' + t('stat.fire') +
-      '</th><th class="num">' + t('stat.range') + '</th></tr>';
+    var head = '<tr><th>' + t('stat.piece') + '</th>' +
+      '<th class="num">' + t('stat.str') + '</th>' +
+      '<th class="num">' + t('stat.hp') + '</th>' +
+      '<th class="num">' + t('stat.move') + '</th>' +
+      '<th class="num">' + t('stat.fire') + '</th>' +
+      '<th class="num">' + t('stat.range') + '</th></tr>';
     var body = '';
     var order = ['S', 'K', 'A'];
     for (var i = 0; i < order.length; i++) {
       var k = order[i], b = Engine.KINDS[k];
       var none = t('stat.none');
       body += '<tr><td><span class="cell-piece">' +
-        '<span class="chip-ico">' + Icons.glyph(k) + '</span>' + t('kind.' + k) +
-        '</span></td>' +
+        '<span class="chip-ico">' + Icons.glyph(k, { theme: currentTheme() }) + '</span>' +
+        esc(t('kind.' + k)) + '</span></td>' +
         '<td class="num">' + fmt(b.str) + '</td>' +
+        '<td class="num">' + fmt(b.hp) + '</td>' +
         '<td class="num">' + b.move + '</td>' +
         '<td class="num">' + (b.fire ? b.fire : none) + '</td>' +
         '<td class="num">' + (b.fire ? b.range : none) + '</td></tr>';
@@ -964,19 +1388,15 @@ window.WarGame = window.WarGame || {};
     return out + '</div>';
   }
 
-  function escapeHTML(s) {
-    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  }
-
   function renderRules() {
     var blocks = I18N.rules(), out = '';
     for (var i = 0; i < blocks.length; i++) {
       var b = blocks[i];
-      if (b[0] === 'h') out += '<h3>' + escapeHTML(b[1]) + '</h3>';
-      else if (b[0] === 'p') out += '<p>' + escapeHTML(b[1]) + '</p>';
+      if (b[0] === 'h') out += '<h3>' + esc(b[1]) + '</h3>';
+      else if (b[0] === 'p') out += '<p>' + esc(b[1]) + '</p>';
       else if (b[0] === 'ul') {
         out += '<ul>';
-        for (var j = 0; j < b[1].length; j++) out += '<li>' + escapeHTML(b[1][j]) + '</li>';
+        for (var j = 0; j < b[1].length; j++) out += '<li>' + esc(b[1][j]) + '</li>';
         out += '</ul>';
       } else if (b[0] === 'pieceTable') out += pieceTableHTML();
       else if (b[0] === 'combos') out += combosHTML();
@@ -984,7 +1404,7 @@ window.WarGame = window.WarGame || {};
     el.rulesBody.innerHTML = out;
   }
 
-  /* -------------------------------------------------- settings screen --- */
+  /* -------------------------------------------------- settings drawer --- */
 
   function renderPresets() {
     var out = '';
@@ -996,9 +1416,31 @@ window.WarGame = window.WarGame || {};
         '<i style="background:' + p.sqDark + '"></i>' +
         '<i style="background:' + p.p0 + '"></i>' +
         '<i style="background:' + p.p1 + '"></i>' +
-        '</span><span>' + t('preset.' + p.id) + '</span></button>';
+        '</span><span>' + esc(t('preset.' + p.id)) + '</span></button>';
     }
     el.presets.innerHTML = out;
+  }
+
+  function renderThemes() {
+    var list = themeList(), out = '', cur = currentTheme();
+    for (var i = 0; i < list.length; i++) {
+      var id = list[i];
+      var d = themeDef(id);
+      var pal = (d && d.palette) || { p0: '#efe6cf', p1: '#2f3550', light: '#efe0c3', dark: '#a97e57' };
+      out += '<button type="button" class="theme-btn' + (id === cur ? ' is-on' : '') +
+        '" data-theme="' + id + '">' +
+        '<span class="theme-view" style="background:' + pal.light + '">' +
+        '<span class="theme-piece" style="color:' + pal.p0 +
+        ';--piece-outline:' + outlineFor(pal.p0) + '">' +
+        Icons.glyph('K', { theme: id }) + '</span>' +
+        '<span class="theme-piece theme-piece--b" style="background:' + pal.dark +
+        ';color:' + pal.p1 + ';--piece-outline:' + outlineFor(pal.p1) + '">' +
+        Icons.glyph('A', { theme: id, flip: true }) + '</span>' +
+        '</span>' +
+        '<span class="theme-name">' + esc(themeName(id)) + '</span>' +
+        '</button>';
+    }
+    el.themes.innerHTML = out;
   }
 
   function fillSettingsForm() {
@@ -1009,16 +1451,18 @@ window.WarGame = window.WarGame || {};
     el.setRandom.checked = !!G.settings.randomBoard;
     el.setAnim.checked = !!G.settings.animations;
     el.setCoords.checked = !!G.settings.coordinates;
-    el.setDiagFire.checked = !!G.settings.diagonalFire;
-    el.setJump.checked = !!G.settings.knightsJump;
+    el.setDiagMoves.checked = !!G.settings.diagonalMoves;
     el.exportCode.value = G.state ? Engine.serialize(G.state) : (savedCode() || '');
+    renderThemes();
     transferMsg('');
   }
 
+  /* every appearance change lands on the board that is already on screen */
   function settingChanged() {
     saveSettings();
     applySettings();
-    if (G.state) renderPieces();
+    renderPieces();
+    renderThemes();
   }
 
   function applyPreset(id) {
@@ -1028,12 +1472,45 @@ window.WarGame = window.WarGame || {};
         G.settings.p1 = PRESETS[i].p1;
         G.settings.sqLight = PRESETS[i].sqLight;
         G.settings.sqDark = PRESETS[i].sqDark;
-        G.settings.randomBoard = false;
+        G.settings.randomBoard = false;   /* a chosen palette wins over the random one */
         fillSettingsForm();
         settingChanged();
         return;
       }
     }
+  }
+
+  function applyTheme(id) {
+    var d = themeDef(id);
+    G.settings.theme = id;
+    if (d && d.palette) {
+      G.settings.p0 = d.palette.p0;
+      G.settings.p1 = d.palette.p1;
+      G.settings.sqLight = d.palette.light;
+      G.settings.sqDark = d.palette.dark;
+    }
+    G.settings.randomBoard = false;
+    fillSettingsForm();
+    settingChanged();
+  }
+
+  function openSettings() {
+    fillSettingsForm();
+    el.settingsBody.scrollTop = 0;
+    openOv('settings');
+  }
+
+  /* ------------------------------------------------------ service worker */
+
+  function registerSW() {
+    if (!('serviceWorker' in navigator)) return;
+    var host = location.hostname;
+    var ok = location.protocol === 'https:' || host === 'localhost' || host === '127.0.0.1';
+    if (!ok) return;      /* never from file:// */
+    try {
+      var p = navigator.serviceWorker.register('./sw.js');
+      if (p && p.catch) p.catch(function () { /* offline is a bonus, not a need */ });
+    } catch (e) { /* ignored on purpose */ }
   }
 
   /* ------------------------------------------------------------ wiring -- */
@@ -1054,7 +1531,8 @@ window.WarGame = window.WarGame || {};
     el.pieces = $('pieces');
     el.marks = $('marks');
     el.fx = $('fx');
-    el.banner = $('banner');
+    el.ribbon = $('ribbon');
+    el.panel = $('panel');
 
     el.turnSwatch = $('turn-swatch');
     el.turnName = $('turn-name');
@@ -1066,10 +1544,14 @@ window.WarGame = window.WarGame || {};
     el.btnHeal = $('btn-heal');
     el.btnEndTurn = $('btn-endturn');
     el.btnUndo = $('btn-undo');
-    el.btnContinue = $('btn-continue');
+    el.btnResume = $('btn-resume');
+    el.menuButtons = $('menu-buttons');
+    el.menuConfirm = $('menu-confirm');
 
     el.rulesBody = $('rules-body');
+    el.settingsBody = $('settings-body');
     el.presets = $('presets');
+    el.themes = $('themes');
 
     el.setP0 = $('set-p0');
     el.setP1 = $('set-p1');
@@ -1078,61 +1560,99 @@ window.WarGame = window.WarGame || {};
     el.setRandom = $('set-random');
     el.setAnim = $('set-anim');
     el.setCoords = $('set-coords');
-    el.setDiagFire = $('set-diagfire');
-    el.setJump = $('set-jump');
+    el.setDiagMoves = $('set-diagmoves');
     el.exportCode = $('export-code');
     el.importCode = $('import-code');
     el.transferMsg = $('transfer-msg');
 
-    el.overMerge = $('overlay-merge');
+    el.inviteText = $('invite-text');
+    el.inviteMsg = $('invite-msg');
+    el.inviteCopy = $('btn-invite-copy');
+    el.inviteGame = $('btn-invite-game');
+
     el.mergePiece = $('merge-piece');
     el.mergeChoices = $('merge-choices');
-    el.overOver = $('overlay-over');
     el.overSwatch = $('over-swatch');
     el.overTitle = $('over-title');
   }
 
   function wire() {
-    $('btn-new').addEventListener('click', newGame);
-    $('btn-continue').addEventListener('click', continueGame);
-    $('btn-rules').addEventListener('click', function () { show('rules'); });
-    $('btn-settings').addEventListener('click', function () { show('settings'); });
+    /* --- the menu card --- */
+    $('btn-new').addEventListener('click', function () {
+      if (gameInProgress()) showConfirm(true);
+      else newGame();
+    });
+    $('btn-new-yes').addEventListener('click', function () {
+      showConfirm(false);
+      newGame();
+    });
+    $('btn-new-no').addEventListener('click', function () { showConfirm(false); });
+    $('btn-resume').addEventListener('click', resumeGame);
+    $('btn-rules').addEventListener('click', function () { openOv('rules'); });
+    $('btn-settings').addEventListener('click', openSettings);
+    $('btn-invite').addEventListener('click', openInvite);
 
-    var backs = document.querySelectorAll('[data-go]');
-    for (var i = 0; i < backs.length; i++) {
-      backs[i].addEventListener('click', function (e) {
-        show(e.currentTarget.getAttribute('data-go'));
-      });
-    }
-
+    /* --- the panel --- */
     el.btnEndTurn.addEventListener('click', endTurn);
     el.btnUndo.addEventListener('click', undo);
     el.btnHeal.addEventListener('click', function () {
       if (G.sel) doAction({ type: 'heal', piece: G.sel });
     });
-    $('btn-gamemenu').addEventListener('click', function () { show('menu'); });
+    $('btn-gamemenu').addEventListener('click', openMenu);
+    $('btn-palette').addEventListener('click', openSettings);
+    $('btn-share').addEventListener('click', openInvite);
 
+    /* --- closing --- */
+    var closers = document.querySelectorAll('[data-close]');
+    for (var i = 0; i < closers.length; i++) {
+      closers[i].addEventListener('click', function (e) {
+        closeOv(e.currentTarget.getAttribute('data-close'));
+      });
+    }
+    /* a tap on the backdrop closes the sheets, never the dialogs */
+    ['rules', 'settings', 'invite'].forEach(function (name) {
+      ov(name).addEventListener('click', function (e) {
+        if (e.target === ov(name)) closeOv(name);
+      });
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Escape') return;
+      var names = ['invite', 'rules', 'settings'];
+      for (var k = 0; k < names.length; k++) {
+        if (isOpen(names[k])) { closeOv(names[k]); return; }
+      }
+      if (isOpen('menu') && gameInProgress()) closeMenu();
+    });
+
+    /* --- the board --- */
     el.board.addEventListener('pointerdown', onBoardPointer);
     el.board.addEventListener('dblclick', function (e) { e.preventDefault(); });
     el.board.addEventListener('contextmenu', function (e) { e.preventDefault(); });
 
+    /* --- the merge dialog --- */
     el.mergeChoices.addEventListener('click', function (e) {
       var b = e.target.closest ? e.target.closest('.merge-choice') : null;
       if (!b || !G.state || !G.state.pendingMerge) return;
       var id = G.state.pendingMerge;
-      closeMerge();
+      closeOv('merge');
       doAction({ type: 'merge', piece: id, kind: b.dataset.kind });
     });
     $('btn-merge-skip').addEventListener('click', function () {
       if (!G.state || !G.state.pendingMerge) return;
       var id = G.state.pendingMerge;
-      closeMerge();
+      closeOv('merge');
       doAction({ type: 'skipMerge', piece: id });
     });
 
-    $('btn-again').addEventListener('click', function () { closeOver(); newGame(); });
-    $('btn-over-menu').addEventListener('click', function () { closeOver(); show('menu'); });
+    /* --- game over --- */
+    $('btn-again').addEventListener('click', function () { closeOv('over'); newGame(); });
+    $('btn-over-menu').addEventListener('click', function () { closeOv('over'); openMenu(); });
 
+    /* --- the settings --- */
+    el.themes.addEventListener('click', function (e) {
+      var b = e.target.closest ? e.target.closest('.theme-btn') : null;
+      if (b) applyTheme(b.dataset.theme);
+    });
     el.presets.addEventListener('click', function (e) {
       var b = e.target.closest ? e.target.closest('.preset') : null;
       if (b) applyPreset(b.dataset.preset);
@@ -1180,13 +1700,10 @@ window.WarGame = window.WarGame || {};
       G.settings.coordinates = el.setCoords.checked;
       settingChanged();
     });
-    el.setDiagFire.addEventListener('change', function () {
-      G.settings.diagonalFire = el.setDiagFire.checked;
+    el.setDiagMoves.addEventListener('change', function () {
+      G.settings.diagonalMoves = el.setDiagMoves.checked;
       saveSettings();
-    });
-    el.setJump.addEventListener('change', function () {
-      G.settings.knightsJump = el.setJump.checked;
-      saveSettings();
+      if (!G.state) showIdleBoard();   /* the opening board follows at once */
     });
 
     $('btn-export').addEventListener('click', doExport);
@@ -1194,9 +1711,20 @@ window.WarGame = window.WarGame || {};
     $('btn-import').addEventListener('click', doImport);
     $('btn-paste').addEventListener('click', doPaste);
 
-    window.addEventListener('resize', measure);
+    /* --- the invite card --- */
+    el.inviteGame.addEventListener('click', function () {
+      G.inviteMode = G.inviteMode === 'game' ? 'app' : 'game';
+      renderInvite();
+      inviteMsg('');
+      if (!canShare()) copyInvite(true);
+    });
+    el.inviteCopy.addEventListener('click', function () {
+      if (canShare()) shareInvite(); else copyInvite();
+    });
+
+    window.addEventListener('resize', remeasure);
     window.addEventListener('orientationchange', function () {
-      measure();
+      remeasure();
       setTimeout(measure, 300);
     });
   }
@@ -1205,6 +1733,8 @@ window.WarGame = window.WarGame || {};
 
   function init() {
     Engine = window.WarGame.Engine;
+    Icons = window.WarGame.Icons;
+    I18N = window.WarGame.I18N;
     cacheNodes();
     if (window.matchMedia) reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
@@ -1220,10 +1750,17 @@ window.WarGame = window.WarGame || {};
     wire();
 
     applySettings();
+    showIdleBoard();
     refreshTexts();
 
-    if (!loadFromHash()) show('menu');
-    measure();
+    /* a link with a position in it opens that position; a saved game opens
+       straight away; with neither, the menu is over the opening board */
+    if (!loadFromHash()) {
+      if (hasSavedGame()) resumeGame();
+      else openMenu();
+    }
+    remeasure();
+    registerSW();
   }
 
   if (document.readyState === 'loading') {
@@ -1235,8 +1772,13 @@ window.WarGame = window.WarGame || {};
   window.WarGame.UI = {
     init: init,
     newGame: newGame,
-    show: show,
+    openMenu: openMenu,
     setLang: setLang,
+    importCode: function (code) {
+      var st = Engine.deserialize(cleanCode(code));
+      startGame(st);
+      return true;
+    },
     state: function () { return G.state; },
     settings: function () { return G.settings; }
   };

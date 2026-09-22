@@ -2,6 +2,16 @@
    War Game - all styles.
    Logical properties everywhere, so the interface mirrors in Hebrew.
    The board itself is always direction: ltr and never mirrors.
+
+   Order: tokens, shell, stage and board, pieces, marks, panel, overlays
+   (menu card, rules sheet, settings drawer, dialogs), form widgets,
+   EFFECTS (the animations), THEME SHELL (the tone of the page and the
+   panel per theme), THEME DECORATION (the board of each theme),
+   motion switches.
+
+   Every surface, every text color and every corner radius here is a token,
+   so a theme block can turn the whole interface parchment, paper, neon or
+   candy without touching the rules above it.
    ===================================================================== */
 
 /* ------------------------------------------------------------- tokens -- */
@@ -16,7 +26,7 @@
   --sq-dark: #a97e57;
 
   /* the shell */
-  --bg: #141720;
+  --bg: #141821;
   --bg-2: #1e2230;
   --bg-3: #272c3c;
   --fg: #f3f2ef;
@@ -31,16 +41,64 @@
   --fire-soft: rgba(235, 155, 38, 0.34);
   --heal: #4fc38c;
 
+  /* surfaces, text and shape - every theme block rewrites these */
+  --fg-2: #e2e3e8;
+  --soft: rgba(255, 255, 255, 0.055);
+  --soft-2: rgba(255, 255, 255, 0.12);
+  --card-bg: rgba(23, 27, 38, 0.92);
+  --code-bg: #11141d;
+  --scrim: rgba(8, 10, 16, 0.72);
+  --btn-inset: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  --btn-drop: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --ov-shadow: 0 26px 70px rgba(0, 0, 0, 0.6);
+  --r-btn: 12px;
+  --r-pill: 999px;
+  --r-card: 20px;
+  --r-board: 16px;
+  --app-bg: radial-gradient(120% 90% at 50% -10%, #1d2233 0%, var(--bg) 60%);
+  --board-shadow:
+    0 22px 50px -14px rgba(0, 0, 0, 0.72),
+    0 0 0 1px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  --frame-mult: 0.019;
+  --frame-max: 12px;
+
+  /* the piece in its square and the badges on it */
+  --pc-size: 80%;
+  --pc-shadow: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+  --pc-shadow-hi: drop-shadow(0 6px 8px rgba(0, 0, 0, 0.55));
+  /* --badge-bg and --badge-fg are deliberately left unset: a badge falls back
+     to the owner's own outline color, and only a theme that wants one fixed
+     badge for both players sets them */
+  --badge-ring: 0 0 0 1px rgba(0, 0, 0, 0.25);
+  --badge-r: 999px;
+  --hurt-bg: #e3a92f;
+  --hurt-fg: #2a1a03;
+  --str-bg: #7a1f1f;
+  --str-fg: #ffe9e0;
+
   /* one family for every mark drawn on a square */
   --ring-w: calc(var(--sq) * 0.055);
   --ring-glow: calc(var(--sq) * 0.2);
+  --dot-core: #fff;
+  --dot-halo: rgba(0, 0, 0, 0.45);
 
   /* viewport in px, kept fresh by ui.js; the fallbacks work on their own */
   --vh: 100vh;
   --vw: 100vw;
   /* one board square in px, set by ui.js */
   --sq: 40px;
+
+  /* room the panel takes beside the board and under it */
+  --side-space: 330px;
+  --below-space: 250px;
+
+  --ov-fast: 0.16s;
+  --ov-slow: 0.23s;
 }
+
+/* with no game running the board has the whole stage to itself */
+body.no-game { --side-space: 48px; --below-space: 48px; }
 
 * { box-sizing: border-box; }
 
@@ -69,41 +127,9 @@ body {
   padding-block-end: env(safe-area-inset-bottom);
   padding-inline-start: env(safe-area-inset-left);
   padding-inline-end: env(safe-area-inset-right);
-  background:
-    radial-gradient(120% 90% at 50% -10%, #1d2233 0%, var(--bg) 60%);
+  background: var(--app-bg);
+  transition: background 0.3s ease;
 }
-
-/* ------------------------------------------------------------ screens -- */
-
-.screen { display: none; flex: 1 1 auto; min-width: 0; min-height: 0; }
-.screen.is-active { display: flex; }
-
-/* -------------------------------------------------------------- menu --- */
-
-.screen--menu.is-active {
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-}
-
-.menu {
-  display: flex;
-  flex-direction: column;
-  gap: 22px;
-  inline-size: min(380px, 100%);
-  text-align: center;
-}
-
-.menu-title {
-  margin: 0;
-  font-size: clamp(2rem, 7vw, 3.1rem);
-  font-weight: 800;
-  letter-spacing: 0.01em;
-}
-
-.menu-buttons { display: flex; flex-direction: column; gap: 10px; }
-
-.lang-switch { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 
 /* ------------------------------------------------------------ buttons -- */
 
@@ -115,16 +141,15 @@ body {
   color: var(--fg);
   background: var(--bg-2);
   border: 1px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--r-btn);
   padding: 0.62em 1.05em;
   min-block-size: 44px;
   cursor: pointer;
   touch-action: manipulation;
   text-align: center;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 1px 2px rgba(0, 0, 0, 0.3);
-  transition: background 0.15s ease, opacity 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: var(--btn-inset), var(--btn-drop);
+  transition: background 0.15s ease, opacity 0.15s ease,
+              box-shadow 0.15s ease, transform 0.11s ease;
 }
 .btn:hover { background: var(--bg-3); }
 .btn:active {
@@ -141,9 +166,9 @@ body {
   font-weight: 700;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.35),
-    0 6px 16px -7px rgba(111, 168, 255, 0.85);
+    0 6px 16px -7px var(--accent-soft);
 }
-.btn--primary:hover { background: #8bb9ff; }
+.btn--primary:hover { filter: brightness(1.12); }
 .btn--heal {
   background: var(--heal);
   color: #06231a;
@@ -152,10 +177,32 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.3),
     0 6px 16px -7px rgba(79, 195, 140, 0.8);
 }
-.btn--ghost { background: transparent; border-color: transparent; box-shadow: none; }
 .btn--wide { inline-size: 100%; }
 .btn--small { min-block-size: 38px; padding: 0.42em 0.85em; font-size: 0.92rem; }
+.btn--small.is-on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 
+.iconbtn {
+  appearance: none;
+  -webkit-appearance: none;
+  flex: 0 0 auto;
+  inline-size: 36px;
+  block-size: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  color: var(--fg);
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--r-btn) - 2px);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.12s ease;
+}
+.iconbtn:hover { background: var(--soft-2); transform: translateY(-1px); }
+.iconbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.iconbtn svg { inline-size: 21px; block-size: 21px; display: block; }
+
+.lang-switch { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 .lang-btn {
   appearance: none;
   -webkit-appearance: none;
@@ -164,19 +211,17 @@ body {
   color: var(--fg);
   background: var(--bg-2);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--r-pill);
   padding: 0.45em 1.1em;
   min-block-size: 40px;
   cursor: pointer;
+  box-shadow: var(--btn-inset);
 }
 .lang-btn.is-on { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
 
-.icon-back { display: inline-block; margin-inline-end: 6px; }
-[dir="rtl"] .icon-back { transform: scaleX(-1); }
+/* --------------------------------------------------- stage and board --- */
 
-/* --------------------------------------------------------- game layout - */
-
-.game {
+.stage {
   flex: 1 1 auto;
   display: flex;
   align-items: center;
@@ -189,56 +234,31 @@ body {
 }
 
 .board-wrap {
-  --board-size: max(180px, min(calc(var(--vh) - 22px), calc(var(--vw) - 330px)));
+  --board-size: max(180px, min(calc(var(--vh) - 24px), calc(var(--vw) - var(--side-space))));
   flex: 0 0 auto;
   inline-size: var(--board-size);
   block-size: var(--board-size);
+  /* no transition on the size: ui.js measures the square from the board and
+     a size in flight would leave --sq behind */
 }
-
-.panel {
-  flex: 0 1 280px;
-  min-inline-size: 190px;
-  max-inline-size: 320px;
-  max-block-size: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 14px;
-  overflow-y: auto;
-}
-
-@media (orientation: portrait) {
-  .game { flex-direction: column; gap: 10px; }
-  .board-wrap {
-    --board-size: max(180px, min(calc(var(--vw) - 18px), calc(var(--vh) - 250px)));
-  }
-  .panel {
-    flex: 0 0 auto;
-    inline-size: min(100%, 560px);
-    max-inline-size: none;
-  }
-  .panel-actions .btn { flex: 1 1 22%; }
-  .panel-actions .btn--primary { flex: 1 1 22%; }
-}
-
-/* ---------------------------------------------------------- the board -- */
 
 .board {
   /* the frame is the border: the squares fill the padding box, so the
      square size ui.js measures stays the width of the grid itself */
-  --frame-w: clamp(4px, calc(var(--board-size, 480px) * 0.018), 11px);
+  --frame-w: clamp(4px, calc(var(--board-size, 480px) * var(--frame-mult)), var(--frame-max));
   position: relative;
   direction: ltr;
   inline-size: 100%;
   block-size: 100%;
   border: var(--frame-w) solid transparent;
-  border-radius: 16px;
+  border-radius: var(--r-board);
+  /* the frame is the transparent border: every background layer is laid out
+     over the border box, so a theme can decorate the band itself */
+  background-origin: border-box;
+  background-clip: border-box;
   background-image: linear-gradient(155deg, #4a5166 0%, #262c3c 46%, #151925 100%);
   overflow: hidden;
-  box-shadow:
-    0 22px 50px -14px rgba(0, 0, 0, 0.72),
-    0 0 0 1px rgba(0, 0, 0, 0.55),
-    inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow: var(--board-shadow);
   touch-action: manipulation;
   -webkit-user-select: none;
   user-select: none;
@@ -251,11 +271,11 @@ body {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  z-index: 3;
-  box-shadow:
+  z-index: 6;
+  box-shadow: var(--board-sink,
     inset 0 0 0 1px rgba(0, 0, 0, 0.38),
     inset 0 7px 12px -8px rgba(0, 0, 0, 0.75),
-    inset 0 -7px 12px -8px rgba(0, 0, 0, 0.45);
+    inset 0 -7px 12px -8px rgba(0, 0, 0, 0.45));
 }
 
 .squares {
@@ -266,11 +286,47 @@ body {
   grid-template-rows: repeat(8, 1fr);
 }
 
+/* the one overlay drawn over the whole grid and under the pieces: the
+   vignette, the grain, the scanlines - each theme fills it in. It is taken
+   out of the grid flow, so it never counts as a ninth column. */
+.squares::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: var(--board-veil, none);
+  mix-blend-mode: var(--board-veil-blend, normal);
+  opacity: var(--board-veil-op, 1);
+}
+
 .sq { position: relative; }
 .sq--light { background: var(--sq-light); }
 .sq--dark { background: var(--sq-dark); }
 
+/* the stack inside the board, from the squares up:
+   1 the theme veil over the grid, 2 the pieces, 3 the marks, 4 the effects,
+   5 the theme's veil over everything, 6 the frame's inner bevel, 7 the ribbon */
 .layer { position: absolute; inset: 0; pointer-events: none; }
+.pieces { z-index: 2; }
+.marks { z-index: 3; }
+.fx { z-index: 4; }
+
+/* the theme's overlay above the pieces: scanlines, bloom, a vignette */
+.board::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  background: var(--board-over, none);
+  mix-blend-mode: var(--board-over-blend, normal);
+  opacity: var(--board-over-op, 1);
+}
+
+/* with no game on it the board is only a backdrop */
+body.no-game .board { pointer-events: none; }
+body.no-game .pieces { opacity: 0.55; filter: saturate(0.85); }
 
 /* coordinates */
 .coord {
@@ -281,6 +337,7 @@ body {
   line-height: 1;
   opacity: 0.45;
   pointer-events: none;
+  z-index: 2;
 }
 .coord--file { inset-block-end: 6%; inset-inline-end: 8%; }
 .coord--rank { inset-block-start: 6%; inset-inline-start: 8%; }
@@ -288,21 +345,26 @@ body {
 .sq--dark .coord { color: rgba(255, 255, 255, 0.9); }
 .board:not(.board--coords) .coord { display: none; }
 
-/* selection and hover */
+/* selection and the pieces that may still act */
 .sq--sel {
+  z-index: 2;
   box-shadow:
     inset 0 0 0 var(--ring-w) var(--accent),
-    inset 0 0 var(--ring-glow) var(--accent-soft);
+    inset 0 0 var(--ring-glow) var(--accent-soft),
+    inset 0 0 0 calc(var(--ring-w) + 1px) rgba(0, 0, 0, 0.35);
 }
+/* on a pointer device, hovering a piece that may still act rings it */
 @media (hover: hover) {
-  .sq--act:hover::before {
+  .sq--act:hover::after {
     content: "";
     position: absolute;
-    inset: 8%;
+    inset: 7%;
+    pointer-events: none;
     border-radius: 50%;
     box-shadow:
-      inset 0 0 0 calc(var(--ring-w) * 0.6) rgba(255, 255, 255, 0.5),
-      inset 0 0 var(--ring-glow) rgba(255, 255, 255, 0.16);
+      inset 0 0 0 calc(var(--ring-w) * 0.55) rgba(255, 255, 255, 0.55),
+      inset 0 0 var(--ring-glow) rgba(255, 255, 255, 0.18),
+      inset 0 0 0 calc(var(--ring-w) * 0.55 + 1px) rgba(0, 0, 0, 0.28);
   }
 }
 
@@ -317,16 +379,17 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.26s cubic-bezier(0.3, 0.7, 0.3, 1), opacity 0.22s linear;
+  transition: transform 0.24s cubic-bezier(0.34, 0.72, 0.28, 1), opacity 0.2s linear;
 }
-.pc--used .piece { opacity: 0.45; filter: saturate(0.65); }
+.pc--used .piece { opacity: 0.42; filter: saturate(0.55) brightness(0.92); }
 
 .piece {
   position: relative;
   display: block;
-  inline-size: 88%;
-  block-size: 88%;
-  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45));
+  inline-size: var(--pc-size);
+  block-size: var(--pc-size);
+  filter: var(--pc-shadow);
+  transition: transform 0.15s cubic-bezier(0.3, 1.3, 0.5, 1), filter 0.15s ease;
 }
 .piece[data-owner="0"] { color: var(--p0); --piece-outline: var(--p0-outline); }
 .piece[data-owner="1"] { color: var(--p1); --piece-outline: var(--p1-outline); }
@@ -342,31 +405,57 @@ body {
   block-size: 44%;
 }
 
-/* a small pill in the piece's own outline tone: dark on a light piece,
-   light on a dark one, so it always reads without shouting */
+/* the bow of a piece that moved one step and kept its shot */
+.piece-bow {
+  position: absolute;
+  inset-block-start: -6%;
+  inset-inline-start: -6%;
+  inline-size: 38%;
+  block-size: 38%;
+  color: var(--fire);
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.75));
+}
+.piece-bow svg { inline-size: 100%; block-size: 100%; display: block; }
+
+/* the health badge at the bottom, the strength badge beside it */
 .badge {
   position: absolute;
-  inset-block-end: -3%;
-  inset-inline-start: -3%;
-  min-inline-size: 34%;
-  block-size: 30%;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0 0.3em;
-  border-radius: 999px;
-  background: var(--piece-outline, #171a22);
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.22);
-  font-size: calc(var(--sq) * 0.2);
+  gap: 0.1em;
+  padding: 0 0.32em;
+  min-inline-size: 36%;
+  block-size: 33%;
+  border-radius: var(--badge-r);
+  background: var(--badge-bg, var(--piece-outline, #171a22));
+  color: var(--badge-fg, currentColor);
+  box-shadow: var(--badge-ring);
+  font-size: calc(var(--sq) * 0.195);
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.01em;
   font-variant-numeric: tabular-nums;
 }
+.badge--hp { inset-block-end: -8%; inset-inline-start: -8%; }
 .badge--hurt {
-  background: #e3a92f;
-  color: #2a1a03;
-  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.3);
+  background: var(--hurt-bg);
+  color: var(--hurt-fg);
+  box-shadow: var(--badge-ring), var(--hurt-glow, 0 0 0 0 transparent);
+  animation: hurtBeat 2.1s ease-in-out infinite;
+}
+.badge--str {
+  inset-block-end: -8%;
+  inset-inline-end: -8%;
+  background: var(--str-bg);
+  color: var(--str-fg);
+  padding: 0 0.24em;
+}
+.badge .mark-ico {
+  inline-size: 0.95em;
+  block-size: 0.95em;
+  display: block;
+  flex: 0 0 auto;
 }
 
 /* -------------------------------------------------------- move marks --- */
@@ -378,16 +467,18 @@ body {
   inline-size: 12.5%;
   block-size: 12.5%;
 }
+/* one family: a dot with a dark halo so it reads on a pale square and on a
+   dark one alike, and two rings of the same weight over it */
 .mark--move::after {
   content: "";
   position: absolute;
-  inset: 38%;
+  inset: 37%;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.8);
+  background: var(--dot-core);
   box-shadow:
-    0 0 0 1px rgba(0, 0, 0, 0.2),
-    0 0 var(--ring-glow) rgba(255, 255, 255, 0.35),
-    0 1px 3px rgba(0, 0, 0, 0.4);
+    0 0 0 calc(var(--sq) * 0.022) var(--dot-halo),
+    0 0 var(--ring-glow) var(--dot-glow, rgba(255, 255, 255, 0.38)),
+    0 1px 3px rgba(0, 0, 0, 0.45);
 }
 .mark--attack::after,
 .mark--fire::after {
@@ -397,14 +488,18 @@ body {
   border-radius: 50%;
   border: var(--ring-w) solid var(--danger);
   box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
     0 0 var(--ring-glow) var(--danger-soft),
     inset 0 0 var(--ring-glow) var(--danger-soft);
+  animation: ringBreathe 1.6s ease-in-out infinite;
 }
 .mark--fire::after {
   border-color: var(--fire);
   box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
     0 0 var(--ring-glow) var(--fire-soft),
     inset 0 0 var(--ring-glow) var(--fire-soft);
+  animation-duration: 1.25s;
 }
 .bowmark {
   position: absolute;
@@ -413,391 +508,13 @@ body {
   inline-size: 32%;
   block-size: 32%;
   color: var(--fire);
-  --piece-outline: #2a1a05;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.8));
   /* the bow itself takes the tap, so a target that may be both attacked and
      fired at still offers the two */
   pointer-events: auto;
   cursor: pointer;
 }
-
-/* ---------------------------------------------------------- the panel -- */
-
-.panel-top { display: flex; flex-direction: column; gap: 12px; }
-
-.turn-line {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 11px 13px;
-  font-weight: 700;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 2px 10px -6px rgba(0, 0, 0, 0.8);
-}
-.turn-name { flex: 1 1 auto; }
-.turn-number { color: var(--muted); font-weight: 600; font-size: 0.9rem; }
-
-.swatch {
-  display: inline-block;
-  inline-size: 1.25em;
-  block-size: 1.25em;
-  border-radius: 7px;
-  border: 1px solid rgba(255, 255, 255, 0.4);
-  flex: 0 0 auto;
-}
-.swatch--big {
-  inline-size: 56px;
-  block-size: 56px;
-  border-radius: 16px;
-  margin-inline: auto;
-}
-
-.combo { display: flex; flex-direction: column; gap: 8px; }
-.combo-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.combo-label { color: var(--muted); font-size: 0.85rem; min-inline-size: 5.5em; }
-.chips { display: flex; gap: 6px; flex-wrap: wrap; }
-
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px 4px 6px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  font-size: 0.85rem;
-  font-weight: 600;
-}
-[dir="rtl"] .chip { padding: 4px 6px 4px 10px; }
-.chip--dim { opacity: 0.4; }
-.chip-ico {
-  position: relative;
-  display: block;
-  inline-size: 1.65em;
-  block-size: 1.65em;
-  flex: 0 0 auto;
-  color: var(--fg);
-  --piece-outline: rgba(0, 0, 0, 0.6);
-}
-
-.panel-msg {
-  margin: 0;
-  min-block-size: 1.3em;
-  color: var(--muted);
-  font-size: 0.9rem;
-  line-height: 1.35;
-}
-
-.panel-actions { display: flex; flex-wrap: wrap; gap: 10px; }
-.panel-actions .btn { flex: 1 1 45%; }
-.panel-actions .btn--primary { flex: 1 1 100%; }
-.panel-actions .btn--heal { flex: 1 1 100%; }
-
-/* ----------------------------------------------- rules and settings ---- */
-
-.screen--doc.is-active { flex-direction: column; }
-
-.doc-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
-  border-block-end: 1px solid var(--line);
-  flex: 0 0 auto;
-}
-.doc-head h2 { margin: 0; font-size: 1.15rem; }
-
-.doc-body {
-  flex: 1 1 auto;
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
-  padding: 16px 16px 40px;
-  inline-size: 100%;
-  max-inline-size: 780px;
-  margin-inline: auto;
-}
-
-.doc-body h3 {
-  margin: 1.5em 0 0.4em;
-  font-size: 1.1rem;
-  color: var(--accent);
-}
-.doc-body h3:first-child { margin-block-start: 0.2em; }
-.doc-body p { margin: 0 0 0.7em; line-height: 1.7; color: #e2e3e8; text-align: start; }
-.doc-body ul { margin: 0 0 1em; padding-inline-start: 1.25em; line-height: 1.7; color: #e2e3e8; }
-.doc-body li { margin-block-end: 0.25em; }
-
-.rules-table { inline-size: 100%; border-collapse: collapse; margin: 0.3em 0 1em; }
-.rules-table th,
-.rules-table td {
-  text-align: start;
-  padding: 9px 10px;
-  border-block-end: 1px solid var(--line);
-}
-.rules-table th { color: var(--muted); font-size: 0.85rem; font-weight: 600; }
-.rules-table .num { text-align: center; font-variant-numeric: tabular-nums; }
-.rules-table .cell-piece { display: flex; align-items: center; gap: 8px; font-weight: 600; }
-
-.combo-list { display: flex; flex-direction: column; gap: 7px; margin: 0.3em 0 1em; }
-.combo-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  padding: 8px 10px;
-}
-.combo-plus { color: var(--muted); }
-
-.card {
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 14px;
-  margin-block-end: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.card h3 { margin: 0; font-size: 1rem; color: var(--fg); }
-
-.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
-.field {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 12px;
-  padding: 8px 10px;
-  font-size: 0.92rem;
-}
-.field input[type="color"] {
-  inline-size: 56px;
-  block-size: 34px;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: none;
-  cursor: pointer;
-  flex: 0 0 auto;
-}
-
-.switch { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem; }
-.switch input { inline-size: 22px; block-size: 22px; accent-color: var(--accent); flex: 0 0 auto; }
-
-.presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
-.preset {
-  appearance: none;
-  -webkit-appearance: none;
-  font: inherit;
-  font-weight: 600;
-  color: var(--fg);
-  background: var(--bg-3);
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  padding: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-block-size: 44px;
-}
-.preset-swatches { display: flex; flex: 0 0 auto; border-radius: 6px; overflow: hidden; }
-.preset-swatches i { inline-size: 12px; block-size: 22px; display: block; }
-
-.note { margin: 0; color: var(--muted); font-size: 0.85rem; line-height: 1.5; }
-.note--live { min-block-size: 1.2em; color: var(--accent); }
-
-.code {
-  inline-size: 100%;
-  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
-  font-size: 0.8rem;
-  line-height: 1.4;
-  color: var(--fg);
-  background: #11141d;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  padding: 8px;
-  resize: vertical;
-  word-break: break-all;
-}
-.row { display: flex; gap: 8px; flex-wrap: wrap; }
-
-/* ---------------------------------------------------------- overlays --- */
-
-.overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: rgba(8, 10, 16, 0.74);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
-}
-.overlay[hidden] { display: none; }
-
-.dialog {
-  inline-size: min(430px, 100%);
-  max-block-size: 100%;
-  overflow-y: auto;
-  background: var(--bg-2);
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  text-align: center;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
-}
-.dialog h2 { margin: 0; font-size: 1.25rem; }
-.dialog p { margin: 0; color: var(--muted); font-size: 0.92rem; line-height: 1.5; }
-
-.merge-piece {
-  position: relative;
-  inline-size: 92px;
-  block-size: 92px;
-  margin-inline: auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.merge-choices { display: flex; gap: 8px; }
-.merge-choice {
-  appearance: none;
-  -webkit-appearance: none;
-  font: inherit;
-  color: var(--fg);
-  flex: 1 1 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 6px;
-  border-radius: 14px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.05);
-  cursor: pointer;
-}
-.merge-choice:hover { background: rgba(255, 255, 255, 0.1); }
-.merge-choice .chip-ico {
-  inline-size: 44px;
-  block-size: 44px;
-  color: var(--p-cur, var(--fg));
-  --piece-outline: var(--p-cur-outline, rgba(0, 0, 0, 0.6));
-}
-.merge-name { font-weight: 700; font-size: 0.95rem; }
-.merge-stats {
-  font-size: 0.74rem;
-  color: var(--muted);
-  line-height: 1.4;
-  font-variant-numeric: tabular-nums;
-}
-
-/* ------------------------------------------------------------ effects -- */
-
-.fx { overflow: hidden; }
-
-.float {
-  position: absolute;
-  font-weight: 800;
-  font-size: calc(var(--sq) * 0.4);
-  line-height: 1;
-  color: #fff;
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
-  animation: floatUp 0.72s ease-out forwards;
-  white-space: nowrap;
-}
-.float--loss { color: #ff8d7f; }
-.float--heal { color: #7bf0bb; }
-
-@keyframes floatUp {
-  0% { opacity: 0; transform: translate(-50%, -30%) scale(0.85); }
-  18% { opacity: 1; }
-  100% { opacity: 0; transform: translate(-50%, -165%) scale(1.05); }
-}
-
-.shot {
-  position: absolute;
-  block-size: calc(var(--sq) * 0.085);
-  border-radius: 99px;
-  background: linear-gradient(90deg, rgba(235, 155, 38, 0), var(--fire));
-  transform-origin: 0 50%;
-  animation: shotFly 0.26s ease-out forwards;
-}
-@keyframes shotFly {
-  from { transform: rotate(var(--ang)) scaleX(0); opacity: 0.2; }
-  to { transform: rotate(var(--ang)) scaleX(1); opacity: 1; }
-}
-
-.hitflash {
-  position: absolute;
-  inset-block-start: 0;
-  left: 0;
-  inline-size: 12.5%;
-  block-size: 12.5%;
-  border-radius: 12%;
-  background: rgba(255, 255, 255, 0.65);
-  animation: flashOut 0.3s ease-out forwards;
-}
-@keyframes flashOut {
-  from { opacity: 0.8; }
-  to { opacity: 0; }
-}
-
-.ring {
-  position: absolute;
-  border-radius: 50%;
-  border: calc(var(--sq) * 0.06) solid var(--heal);
-  animation: ringPulse 0.55s ease-out forwards;
-}
-@keyframes ringPulse {
-  from { transform: scale(0.45); opacity: 0.95; }
-  to { transform: scale(1.3); opacity: 0; }
-}
-
-.spark {
-  position: absolute;
-  inline-size: calc(var(--sq) * 0.13);
-  block-size: calc(var(--sq) * 0.13);
-  border-radius: 50%;
-  animation: sparkOut 0.5s ease-out forwards;
-}
-@keyframes sparkOut {
-  from { transform: translate(-50%, -50%) scale(1); opacity: 1; }
-  to { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.2); opacity: 0; }
-}
-
-.banner {
-  position: absolute;
-  inset-block-start: 41%;
-  left: 0;
-  right: 0;
-  block-size: 18%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(var(--sq) * 0.5);
-  font-weight: 800;
-  opacity: 0;
-  pointer-events: none;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
-}
-.banner.is-on { animation: bannerSweep 0.75s ease-in-out; }
-@keyframes bannerSweep {
-  0% { opacity: 0; transform: translateX(-24%); }
-  22% { opacity: 1; transform: none; }
-  72% { opacity: 1; transform: none; }
-  100% { opacity: 0; transform: translateX(24%); }
-}
+.bowmark svg { inline-size: 100%; block-size: 100%; display: block; }
 
 .heal-btn {
   position: absolute;
@@ -827,6 +544,1331 @@ body {
   line-height: 1.5;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
   white-space: nowrap;
+}
+
+/* ---------------------------------------------------------- the panel -- */
+
+.panel {
+  flex: 0 1 300px;
+  min-inline-size: 200px;
+  max-inline-size: 330px;
+  max-block-size: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 14px;
+  overflow-y: auto;
+}
+.panel[hidden] { display: none; }
+
+.panel-top { display: flex; flex-direction: column; gap: 12px; }
+
+.turn-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-btn);
+  padding: 9px 11px;
+  font-weight: 700;
+  box-shadow: var(--btn-inset), 0 2px 10px -6px rgba(0, 0, 0, 0.8);
+}
+.turn-name { flex: 1 1 auto; min-inline-size: 0; }
+.turn-number { color: var(--muted); font-weight: 600; font-size: 0.9rem; }
+
+.swatch {
+  display: inline-block;
+  inline-size: 1.25em;
+  block-size: 1.25em;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  flex: 0 0 auto;
+}
+.swatch--big {
+  inline-size: 56px;
+  block-size: 56px;
+  border-radius: 16px;
+  margin-inline: auto;
+}
+
+.combo { display: flex; flex-direction: column; gap: 8px; }
+.combo-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.combo-label { color: var(--muted); font-size: 0.85rem; min-inline-size: 5.5em; }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px 4px 6px;
+  border-radius: var(--r-pill);
+  background: var(--soft);
+  border: 1px solid var(--line);
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+[dir="rtl"] .chip { padding: 4px 6px 4px 10px; }
+.chip--dim { opacity: 0.4; }
+.chip-ico {
+  position: relative;
+  display: block;
+  inline-size: 1.65em;
+  block-size: 1.65em;
+  flex: 0 0 auto;
+  color: var(--ico-fg, var(--fg));
+  --piece-outline: var(--ico-outline, rgba(0, 0, 0, 0.6));
+}
+
+.panel-msg {
+  margin: 0;
+  min-block-size: 1.3em;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+.panel-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.panel-actions .btn { flex: 1 1 45%; }
+.panel-actions .btn--primary { flex: 1 1 100%; }
+.panel-actions .btn--heal { flex: 1 1 100%; }
+
+/* ------------------------------------------------- portrait and phone -- */
+
+@media (orientation: portrait) {
+  .stage { flex-direction: column; gap: 10px; }
+  .board-wrap {
+    --board-size: max(180px, min(calc(var(--vw) - 20px), calc(var(--vh) - var(--below-space))));
+  }
+  .panel {
+    flex: 0 0 auto;
+    inline-size: min(100%, 560px);
+    max-inline-size: none;
+  }
+  .panel-actions .btn { flex: 1 1 22%; }
+  .panel-actions .btn--primary { flex: 1 1 22%; }
+}
+
+/* a phone: the board takes the width, the panel is a bar under it */
+@media (max-width: 600px) {
+  :root { --below-space: 200px; }
+  body.no-game { --below-space: 30px; }
+  .stage { flex-direction: column; gap: 6px; padding: 4px; }
+  .board-wrap {
+    --board-size: max(160px, min(calc(var(--vw) - 8px), calc(var(--vh) - var(--below-space))));
+  }
+  /* a phone keeps each theme's character, only smaller */
+  .board { border-radius: min(var(--r-board), 16px); }
+  .panel {
+    flex: 0 0 auto;
+    inline-size: 100%;
+    max-inline-size: none;
+    gap: 6px;
+  }
+  .panel-top { gap: 6px; }
+  .turn-line { padding: 6px 9px; border-radius: 11px; font-size: 0.92rem; }
+  .iconbtn { inline-size: 32px; block-size: 32px; }
+  .combo { flex-direction: row; gap: 10px; flex-wrap: wrap; }
+  .combo-label { min-inline-size: 0; }
+  .chip { font-size: 0.78rem; padding: 2px 8px 2px 4px; }
+  [dir="rtl"] .chip { padding: 2px 4px 2px 8px; }
+  .chip-ico { inline-size: 1.4em; block-size: 1.4em; }
+  .panel-msg { font-size: 0.82rem; min-block-size: 1.1em; }
+  .panel-actions { gap: 6px; }
+  .panel-actions .btn,
+  .panel-actions .btn--primary,
+  .panel-actions .btn--heal {
+    flex: 1 1 22%;
+    min-block-size: 40px;
+    padding: 0.4em 0.5em;
+    font-size: 0.88rem;
+    border-radius: 10px;
+  }
+}
+
+/* ---------------------------------------------------------- overlays --- */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: var(--scrim);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  opacity: 0;
+  transition: opacity var(--ov-slow) ease;
+}
+.overlay.is-open { opacity: 1; }
+.overlay[hidden] { display: none; }
+/* the menu waits behind a sheet, a drawer or a dialog opened from it */
+.overlay--menu.is-under { opacity: 0; pointer-events: none; }
+
+/* the card of the menu and the dialogs */
+.card-pop,
+.dialog {
+  transform: translateY(12px) scale(0.965);
+  transition: transform var(--ov-slow) cubic-bezier(0.18, 0.9, 0.28, 1.08);
+}
+.overlay.is-open .card-pop,
+.overlay.is-open .dialog { transform: none; }
+
+.menu {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  inline-size: min(380px, 100%);
+  max-block-size: 100%;
+  overflow-y: auto;
+  text-align: center;
+  background: var(--card-bg);
+  border: 1px solid var(--line);
+  border-radius: calc(var(--r-card) + 2px);
+  padding: 22px 20px;
+  box-shadow: var(--ov-shadow);
+}
+.menu-title {
+  margin: 0;
+  font-size: clamp(1.7rem, 6vw, 2.6rem);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--title-fg, var(--fg));
+  text-shadow: var(--title-shadow, none);
+}
+.menu-buttons { display: flex; flex-direction: column; gap: 10px; }
+.menu-buttons[hidden] { display: none; }
+.menu-confirm { display: flex; flex-direction: column; gap: 10px; }
+.menu-confirm[hidden] { display: none; }
+.menu-confirm p { margin: 0 0 2px; color: var(--muted); font-size: 0.95rem; }
+
+/* the rules sheet */
+.overlay--sheet { padding: 12px; }
+.sheet {
+  inline-size: min(760px, 100%);
+  max-block-size: min(88vh, calc(var(--vh) - 40px));
+  display: flex;
+  flex-direction: column;
+  background: var(--card-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  overflow: hidden;
+  box-shadow: var(--ov-shadow);
+  transform: translateY(16px);
+  opacity: 0.6;
+  transition: transform var(--ov-slow) cubic-bezier(0.2, 0.8, 0.3, 1),
+              opacity var(--ov-slow) ease;
+}
+.overlay--sheet.is-open .sheet { transform: none; opacity: 1; }
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-block-end: 1px solid var(--line);
+  flex: 0 0 auto;
+}
+.sheet-head h2 { margin: 0; font-size: 1.1rem; flex: 1 1 auto; }
+
+.doc-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 14px 18px 30px;
+}
+.doc-body h3 {
+  margin: 1.4em 0 0.4em;
+  font-size: 1.08rem;
+  color: var(--accent);
+}
+.doc-body h3:first-child { margin-block-start: 0.2em; }
+.doc-body p { margin: 0 0 0.7em; line-height: 1.7; color: var(--fg-2); text-align: start; }
+.doc-body ul { margin: 0 0 1em; padding-inline-start: 1.25em; line-height: 1.7; color: var(--fg-2); }
+.doc-body li { margin-block-end: 0.25em; }
+
+.rules-table { inline-size: 100%; border-collapse: collapse; margin: 0.3em 0 1em; }
+.rules-table th,
+.rules-table td {
+  text-align: start;
+  padding: 8px 8px;
+  border-block-end: 1px solid var(--line);
+}
+.rules-table th { color: var(--muted); font-size: 0.82rem; font-weight: 600; }
+.rules-table .num { text-align: center; font-variant-numeric: tabular-nums; }
+.rules-table .cell-piece { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+/* six columns fit a phone only this tight */
+@media (max-width: 600px) {
+  .rules-table th,
+  .rules-table td { padding: 8px 4px; }
+  .rules-table .cell-piece { gap: 5px; }
+}
+
+.combo-list { display: flex; flex-direction: column; gap: 7px; margin: 0.3em 0 1em; }
+.combo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: var(--r-btn);
+  padding: 8px 10px;
+}
+.combo-plus { color: var(--muted); }
+
+/* the settings drawer: from the inline end in landscape, from the bottom
+   in portrait, always over the panel and never over the whole board */
+.overlay--drawer {
+  padding: 0;
+  align-items: stretch;
+  justify-content: flex-end;
+  background: rgba(8, 10, 16, 0.38);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.drawer {
+  inline-size: min(420px, 100%);
+  max-block-size: 100%;
+  display: flex;
+  flex-direction: column;
+  background: var(--card-bg);
+  border-inline-start: 1px solid var(--line);
+  box-shadow: -18px 0 50px rgba(0, 0, 0, 0.5);
+  transform: translateX(100%);
+  transition: transform var(--ov-slow) cubic-bezier(0.2, 0.86, 0.3, 1);
+}
+[dir="rtl"] .drawer { transform: translateX(-100%); box-shadow: 18px 0 50px rgba(0, 0, 0, 0.5); }
+.overlay--drawer.is-open .drawer { transform: none; }
+
+.drawer-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 14px 14px 30px;
+}
+
+@media (orientation: portrait) {
+  .overlay--drawer { align-items: flex-end; justify-content: stretch; }
+  .drawer {
+    inline-size: 100%;
+    max-block-size: min(82vh, calc(var(--vh) - 60px));
+    border-inline-start: 0;
+    border-block-start: 1px solid var(--line);
+    border-start-start-radius: 20px;
+    border-start-end-radius: 20px;
+    box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.5);
+    transform: translateY(100%);
+  }
+  [dir="rtl"] .drawer { transform: translateY(100%); box-shadow: 0 -18px 50px rgba(0, 0, 0, 0.5); }
+}
+
+/* the dialogs */
+.dialog {
+  inline-size: min(430px, 100%);
+  max-block-size: 100%;
+  overflow-y: auto;
+  background: var(--card-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-card);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+  box-shadow: var(--ov-shadow);
+}
+.dialog h2 { margin: 0; font-size: 1.25rem; }
+.dialog p { margin: 0; color: var(--muted); font-size: 0.92rem; line-height: 1.5; }
+
+.merge-piece {
+  position: relative;
+  inline-size: 92px;
+  block-size: 92px;
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  --sq: 92px;
+}
+.merge-choices { display: flex; gap: 8px; }
+.merge-choice {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  color: var(--fg);
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px;
+  border-radius: var(--r-btn);
+  border: 1px solid var(--line);
+  background: var(--soft);
+  cursor: pointer;
+  transition: background 0.14s ease, transform 0.14s ease;
+}
+.merge-choice:hover { background: var(--soft-2); transform: translateY(-2px); }
+.merge-choice .chip-ico {
+  inline-size: 44px;
+  block-size: 44px;
+  color: var(--p-cur, var(--fg));
+  --piece-outline: var(--p-cur-outline, rgba(0, 0, 0, 0.6));
+}
+.merge-name { font-weight: 700; font-size: 0.95rem; }
+.merge-stats {
+  font-size: 0.74rem;
+  color: var(--muted);
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+}
+
+.invite-text {
+  text-align: start;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-block-size: 40vh;
+  overflow-y: auto;
+  margin: 0;
+}
+.row--center { justify-content: center; }
+
+/* --------------------------------------------------- the form widgets -- */
+
+.card {
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: var(--r-btn);
+  padding: 14px;
+  margin-block-end: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.card h3 { margin: 0; font-size: 1rem; color: var(--fg); }
+.card h4 {
+  margin: 0.3em 0 -0.2em;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.themes { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 8px; }
+.theme-btn {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  color: var(--fg);
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-btn);
+  padding: 6px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}
+.theme-btn:hover { transform: translateY(-2px); }
+.theme-btn.is-on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.theme-view {
+  position: relative;
+  inline-size: 100%;
+  block-size: 42px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+}
+.theme-piece {
+  position: relative;
+  flex: 1 1 50%;
+  display: block;
+  padding: 4px;
+}
+.theme-piece svg { inline-size: 100%; block-size: 100%; display: block; }
+.theme-name { font-size: 0.8rem; font-weight: 600; }
+
+.fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--soft);
+  border: 1px solid var(--line);
+  border-radius: var(--r-btn);
+  padding: 8px 10px;
+  font-size: 0.9rem;
+}
+.field input[type="color"] {
+  inline-size: 56px;
+  block-size: 34px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: none;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+
+.switch { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 0.95rem; }
+.switch input { inline-size: 22px; block-size: 22px; accent-color: var(--accent); flex: 0 0 auto; }
+
+.presets { display: grid; grid-template-columns: repeat(auto-fit, minmax(118px, 1fr)); gap: 8px; }
+.preset {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  font-weight: 600;
+  color: var(--fg);
+  background: var(--bg-3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-btn);
+  padding: 8px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-block-size: 44px;
+  font-size: 0.9rem;
+  transition: transform 0.14s ease;
+}
+.preset:hover { transform: translateY(-2px); }
+.preset-swatches { display: flex; flex: 0 0 auto; border-radius: 6px; overflow: hidden; }
+.preset-swatches i { inline-size: 12px; block-size: 22px; display: block; }
+
+.note { margin: 0; color: var(--muted); font-size: 0.85rem; line-height: 1.5; }
+.note--live { min-block-size: 1.2em; color: var(--accent); }
+
+.code {
+  inline-size: 100%;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.4;
+  color: var(--fg);
+  background: var(--code-bg);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px;
+  resize: vertical;
+  word-break: break-all;
+}
+.row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* =====================================================================
+   EFFECTS - every animation of the game lives in this block.
+   Each one is driven by a small function in ui.js; the looks are here.
+   Nothing runs longer than about 600 ms, so a turn on an iPad never waits
+   for the screen. A theme colours an effect through the --fx-* tokens it
+   sets in its own block further down.
+   ===================================================================== */
+
+.fx { overflow: hidden; }
+
+/* --- the piece itself ------------------------------------------------- */
+
+/* the piece that is moving lifts off the board */
+.pc--moving { z-index: 4; }
+.pc--moving .piece {
+  animation: none;
+  transform: translateY(-10%) scale(1.09);
+  filter: var(--pc-shadow-move, drop-shadow(0 9px 10px rgba(0, 0, 0, 0.55)));
+}
+
+/* the selected piece bobs, with a little sway so it reads as alive */
+.pc--sel { z-index: 3; }
+.pc--sel .piece { animation: bob 1.25s ease-in-out infinite; }
+@keyframes bob {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  32% { transform: translateY(-9%) rotate(-2deg); }
+  66% { transform: translateY(-3%) rotate(2deg); }
+}
+
+/* a piece that took a hit shakes */
+.pc--shake { z-index: 4; }
+.pc--shake .piece { animation: shake 0.28s cubic-bezier(0.36, 0.07, 0.19, 0.97); }
+@keyframes shake {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  16% { transform: translateX(-12%) rotate(-6deg); }
+  38% { transform: translateX(10%) rotate(5deg); }
+  62% { transform: translateX(-6%) rotate(-3deg); }
+  84% { transform: translateX(3%) rotate(1deg); }
+}
+
+/* the merged piece scales in past its size and settles */
+.pc--pop { z-index: 4; }
+.pc--pop .piece { animation: pop 0.42s cubic-bezier(0.2, 1.6, 0.35, 1); }
+@keyframes pop {
+  0% { transform: scale(0.3) rotate(-14deg); opacity: 0.3; }
+  55% { transform: scale(1.16) rotate(4deg); opacity: 1; }
+  100% { transform: scale(1) rotate(0deg); opacity: 1; }
+}
+
+/* the bow of a kept shot pulses */
+.piece-bow { animation: bowPulse 1.2s ease-in-out infinite; }
+@keyframes bowPulse {
+  0%, 100% { opacity: 0.7; transform: scale(0.93); }
+  50% { opacity: 1; transform: scale(1.17); }
+}
+
+/* the amber badge of a hurt piece beats, so a wound is never missed */
+@keyframes hurtBeat {
+  0%, 82%, 100% { transform: scale(1); }
+  88% { transform: scale(1.16); }
+  94% { transform: scale(0.97); }
+}
+
+/* hover on a pointer device lifts the piece */
+@media (hover: hover) {
+  .pc:hover { z-index: 3; }
+  .pc:hover .piece {
+    transform: translateY(-8%) scale(1.07);
+    filter: var(--pc-shadow-hi);
+  }
+}
+
+/* --- the marks on the squares ----------------------------------------- */
+
+/* the dots of the legal squares pulse, out of step with each other */
+.mark--move::after { animation: dotPulse 1.5s ease-in-out infinite; }
+.mark--move:nth-child(2n)::after { animation-delay: -0.35s; }
+.mark--move:nth-child(3n)::after { animation-delay: -0.7s; }
+.mark--move:nth-child(5n)::after { animation-delay: -1.05s; }
+@keyframes dotPulse {
+  0%, 100% { transform: scale(0.78); opacity: 0.68; }
+  50% { transform: scale(1.16); opacity: 1; }
+}
+
+/* the attack and fire rings breathe on the same beat */
+@keyframes ringBreathe {
+  0%, 100% { transform: scale(0.95); }
+  50% { transform: scale(1.04); }
+}
+
+/* --- what the effects layer draws -------------------------------------- */
+
+/* floating numbers: a quick pop up, then the drift */
+.float {
+  position: absolute;
+  font-weight: 800;
+  font-size: calc(var(--sq) * 0.42);
+  line-height: 1;
+  color: #fff;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.85),
+    0 0 calc(var(--sq) * 0.09) rgba(0, 0, 0, 0.55);
+  animation: floatUp 0.72s cubic-bezier(0.14, 0.86, 0.3, 1) forwards;
+  white-space: nowrap;
+  filter: var(--fx-glow, none);
+}
+.float--loss { color: var(--fx-loss, #ff8d7f); }
+.float--heal { color: var(--fx-heal-num, #7bf0bb); }
+@keyframes floatUp {
+  0% { opacity: 0; transform: translate(-50%, -18%) scale(0.55); }
+  24% { opacity: 1; transform: translate(-50%, -78%) scale(1.18); }
+  42% { transform: translate(-50%, -98%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -190%) scale(0.92); }
+}
+
+/* the arrow: fletching, an arc across the shot, turning into its flight */
+.arrow {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 50% 50%;
+  animation: arrowFly 0.3s cubic-bezier(0.4, 0.05, 0.7, 0.6) forwards;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.55)) var(--fx-glow, none);
+}
+.arrow svg { inline-size: 100%; block-size: 100%; display: block; }
+@keyframes arrowFly {
+  0% {
+    transform: translate(var(--x0), var(--y0))
+               rotate(calc(var(--ang) - 17deg)) scale(0.7);
+    opacity: 0;
+  }
+  12% { opacity: 1; }
+  50% { transform: translate(var(--xm), var(--ym)) rotate(var(--ang)) scale(1); }
+  100% {
+    transform: translate(var(--x1), var(--y1))
+               rotate(calc(var(--ang) + 15deg)) scale(1);
+    opacity: 1;
+  }
+}
+
+/* the burst where the arrow lands */
+.burst {
+  position: absolute;
+  inline-size: calc(var(--sq) * 0.78);
+  block-size: calc(var(--sq) * 0.78);
+  margin-inline-start: calc(var(--sq) * -0.39);
+  margin-block-start: calc(var(--sq) * -0.39);
+  border-radius: 50%;
+  background: var(--fx-burst, radial-gradient(circle,
+    rgba(255, 244, 214, 0.98) 0%,
+    rgba(235, 155, 38, 0.65) 42%,
+    rgba(235, 155, 38, 0) 70%));
+  animation: burstOut 0.36s cubic-bezier(0.15, 0.6, 0.35, 1) forwards;
+}
+@keyframes burstOut {
+  0% { transform: scale(0.3); opacity: 0.35; }
+  18% { opacity: 1; }
+  58% { opacity: 0.85; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+/* the sword clash of a melee attack: a white flash and a ring of light */
+.clash {
+  position: absolute;
+  inline-size: calc(var(--sq) * 0.9);
+  block-size: calc(var(--sq) * 0.9);
+  margin-inline-start: calc(var(--sq) * -0.45);
+  margin-block-start: calc(var(--sq) * -0.45);
+  border-radius: 50%;
+  background: var(--fx-clash, radial-gradient(circle,
+    rgba(255, 255, 255, 0.98) 0%,
+    rgba(255, 220, 140, 0.75) 36%,
+    rgba(255, 210, 120, 0) 70%));
+  animation: clashOut 0.38s cubic-bezier(0.15, 0.6, 0.35, 1) forwards;
+}
+@keyframes clashOut {
+  0% { transform: scale(0.3) rotate(-16deg); opacity: 0.25; }
+  15% { opacity: 1; }
+  55% { opacity: 0.85; }
+  100% { transform: scale(1.75) rotate(12deg); opacity: 0; }
+}
+
+/* the square that was hit flashes white for a moment */
+.flash {
+  position: absolute;
+  inline-size: var(--sq);
+  block-size: var(--sq);
+  margin-inline-start: calc(var(--sq) * -0.5);
+  margin-block-start: calc(var(--sq) * -0.5);
+  border-radius: 12%;
+  background: var(--fx-flash, radial-gradient(circle,
+    rgba(255, 255, 255, 0.75) 0%, rgba(255, 255, 255, 0) 68%));
+  animation: flashOut 0.28s ease-out forwards;
+}
+@keyframes flashOut {
+  0% { opacity: 0; transform: scale(0.72); }
+  20% { opacity: 0.95; }
+  60% { opacity: 0.6; }
+  100% { opacity: 0; transform: scale(1.16); }
+}
+
+/* sparks of a clash and of a merge */
+.spark {
+  position: absolute;
+  inline-size: calc(var(--sq) * 0.12);
+  block-size: calc(var(--sq) * 0.12);
+  border-radius: 50%;
+  box-shadow: var(--fx-spark-glow, none);
+  animation: sparkOut 0.5s cubic-bezier(0.15, 0.7, 0.3, 1) forwards;
+}
+@keyframes sparkOut {
+  0% { transform: translate(-50%, -50%) scale(1.25); opacity: 1; }
+  58% { opacity: 0.95; }
+  100% {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(0.18);
+    opacity: 0;
+  }
+}
+
+/* the fragments a dead piece breaks into */
+.frag {
+  position: absolute;
+  inline-size: var(--fs, 6px);
+  block-size: var(--fs, 6px);
+  border-radius: var(--fx-frag-r, 2px);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), var(--fx-frag-glow, 0 0 0 0 transparent);
+  animation: fragFall 0.56s cubic-bezier(0.4, 0, 0.75, 0.5) forwards;
+}
+@keyframes fragFall {
+  0% { transform: translate(-50%, -50%) rotate(0deg) scale(1.1); opacity: 1; }
+  25% {
+    transform: translate(calc(-50% + var(--dx) * 0.45), calc(-50% - var(--sq) * 0.12))
+               rotate(calc(var(--rot) * 0.3)) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy)))
+               rotate(var(--rot)) scale(0.85);
+    opacity: 0;
+  }
+}
+
+/* the heal pulse and its sparkles */
+.ring {
+  position: absolute;
+  border-radius: 50%;
+  border: calc(var(--sq) * 0.06) solid var(--heal);
+  box-shadow: 0 0 calc(var(--sq) * 0.2) var(--heal);
+  animation: ringPulse 0.52s cubic-bezier(0.15, 0.65, 0.3, 1) forwards;
+}
+@keyframes ringPulse {
+  0% { transform: scale(0.3); opacity: 1; }
+  55% { opacity: 0.8; }
+  100% { transform: scale(1.45); opacity: 0; }
+}
+.sparkle {
+  position: absolute;
+  inline-size: calc(var(--sq) * 0.13);
+  block-size: calc(var(--sq) * 0.13);
+  background: radial-gradient(circle, #e8fff5 0%, var(--heal) 58%, rgba(79, 195, 140, 0) 74%);
+  border-radius: 50%;
+  animation: sparkleUp 0.6s ease-out forwards;
+}
+@keyframes sparkleUp {
+  0% { transform: translate(-50%, -50%) scale(0.35); opacity: 0; }
+  28% { opacity: 1; transform: translate(-50%, calc(-50% - var(--sq) * 0.25)) scale(1.15); }
+  100% { transform: translate(-50%, calc(-50% - var(--sq) * 0.85)) scale(0.6); opacity: 0; }
+}
+
+/* the turn ribbon */
+.ribbon {
+  position: absolute;
+  inset-block-start: 41%;
+  left: 0;
+  right: 0;
+  block-size: 18%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: calc(var(--sq) * 0.5);
+  font-weight: 800;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 7;
+  box-shadow:
+    0 6px 24px rgba(0, 0, 0, 0.45),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+/* the sheen over whatever colour ui.js paints it */
+.ribbon::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.34) 0%,
+    rgba(255, 255, 255, 0.04) 46%,
+    rgba(0, 0, 0, 0.22) 100%);
+}
+.ribbon span { position: relative; letter-spacing: 0.02em; }
+.ribbon.is-on { animation: ribbonSweep 0.56s cubic-bezier(0.22, 0.9, 0.28, 1); }
+@keyframes ribbonSweep {
+  0% { opacity: 0; transform: translateX(-32%) skewX(-11deg); }
+  22% { opacity: 1; transform: translateX(0) skewX(0deg); }
+  70% { opacity: 1; transform: translateX(0) skewX(0deg); }
+  100% { opacity: 0; transform: translateX(28%) skewX(9deg); }
+}
+
+/* =====================================================================
+   THEME SHELL - the tone of the page, the panel, the buttons and the
+   overlays, one block per theme. Everything here is a token the rules
+   above already read, so no rule is repeated per theme.
+   ===================================================================== */
+
+/* --- classic: candle-lit walnut and brass ------------------------------ */
+body.theme-classic {
+  --bg: #17110b;
+  --bg-2: #2c2016;
+  --bg-3: #3d2d1f;
+  --fg: #f5ead6;
+  --fg-2: #e2d3b8;
+  --muted: #b59b76;
+  --line: rgba(226, 190, 128, 0.22);
+  --accent: #dba746;
+  --accent-ink: #2a1b06;
+  --accent-soft: rgba(219, 167, 70, 0.6);
+  --danger: #d4523f;
+  --danger-soft: rgba(212, 82, 63, 0.4);
+  --fire: #e2941e;
+  --fire-soft: rgba(226, 148, 30, 0.4);
+  --heal: #5aab72;
+  --soft: rgba(255, 233, 197, 0.06);
+  --soft-2: rgba(255, 233, 197, 0.14);
+  --card-bg: linear-gradient(165deg, rgba(58, 42, 28, 0.96), rgba(31, 22, 14, 0.97));
+  --code-bg: #170f08;
+  --scrim: rgba(22, 13, 5, 0.74);
+  --btn-inset: inset 0 1px 0 rgba(255, 226, 170, 0.1);
+  --app-bg:
+    radial-gradient(90% 70% at 50% -14%, rgba(196, 140, 62, 0.28) 0%, rgba(0, 0, 0, 0) 62%),
+    radial-gradient(120% 100% at 50% 110%, #2a1d12 0%, #17110b 60%);
+  --title-fg: #f0d79b;
+  --title-shadow: 0 2px 0 rgba(0, 0, 0, 0.45);
+  --dot-halo: rgba(48, 27, 8, 0.55);
+}
+
+/* --- heraldic: parchment, wine and gold -------------------------------- */
+body.theme-heraldic {
+  --bg: #2b1312;
+  --bg-2: #f1e3c2;
+  --bg-3: #e5d3a9;
+  --fg: #33200f;
+  --fg-2: #4a3018;
+  --muted: #7d5c33;
+  --line: rgba(95, 58, 26, 0.3);
+  --accent: #8e2020;
+  --accent-ink: #f8ecce;
+  --accent-soft: rgba(142, 32, 32, 0.6);
+  --danger: #9c2b22;
+  --danger-soft: rgba(156, 43, 34, 0.42);
+  --fire: #b8781a;
+  --fire-soft: rgba(184, 120, 26, 0.42);
+  --heal: #3f7a4f;
+  --soft: rgba(120, 80, 35, 0.09);
+  --soft-2: rgba(120, 80, 35, 0.18);
+  --card-bg: linear-gradient(162deg, #f8eed5 0%, #efe0bd 52%, #e2cfa4 100%);
+  --code-bg: #f8f0da;
+  --scrim: rgba(48, 20, 12, 0.66);
+  --btn-inset: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  --btn-drop: 0 1px 2px rgba(80, 50, 20, 0.25);
+  --ov-shadow: 0 24px 60px rgba(24, 8, 4, 0.6);
+  --r-btn: 9px;
+  --r-card: 14px;
+  --app-bg:
+    radial-gradient(85% 65% at 50% -10%, rgba(180, 96, 60, 0.3) 0%, rgba(0, 0, 0, 0) 60%),
+    radial-gradient(120% 110% at 50% 110%, #43201c 0%, #21100f 65%);
+  --ico-fg: #7c5527;
+  --ico-outline: rgba(255, 249, 232, 0.9);
+  --title-fg: #7d1c1c;
+  --title-shadow: 0 1px 0 rgba(255, 255, 255, 0.55);
+  --dot-halo: rgba(74, 40, 12, 0.55);
+}
+
+/* --- ink: black on paper ----------------------------------------------- */
+body.theme-ink {
+  --bg: #b8b2a4;
+  --bg-2: #f8f5ed;
+  --bg-3: #ece7d9;
+  --fg: #15161b;
+  --fg-2: #35373e;
+  --muted: #6f6e67;
+  --line: rgba(24, 24, 28, 0.2);
+  --accent: #191a1f;
+  --accent-ink: #f8f5ed;
+  --accent-soft: rgba(25, 26, 31, 0.45);
+  --danger: #a3322a;
+  --danger-soft: rgba(163, 50, 42, 0.36);
+  --fire: #a8731a;
+  --fire-soft: rgba(168, 115, 26, 0.36);
+  --heal: #3d7a55;
+  --soft: rgba(20, 20, 25, 0.05);
+  --soft-2: rgba(20, 20, 25, 0.1);
+  --card-bg: linear-gradient(172deg, #fcfaf4 0%, #f2eee2 100%);
+  --code-bg: #f3efe3;
+  --scrim: rgba(66, 63, 56, 0.55);
+  --btn-inset: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --btn-drop: 0 1px 2px rgba(40, 38, 32, 0.22);
+  --ov-shadow: 0 20px 48px rgba(52, 47, 38, 0.38);
+  --r-btn: 5px;
+  --r-pill: 5px;
+  --r-card: 8px;
+  --app-bg:
+    radial-gradient(90% 70% at 50% -12%, #e6e1d4 0%, rgba(0, 0, 0, 0) 58%),
+    linear-gradient(170deg, #d6d1c4 0%, #b8b2a4 100%);
+  --ico-fg: #1b1c21;
+  --ico-outline: rgba(255, 255, 255, 0.88);
+  --title-fg: #15161b;
+  --title-shadow: 0 1px 0 rgba(255, 255, 255, 0.7);
+  --dot-halo: rgba(20, 20, 24, 0.55);
+  --fx-loss: #8f2318;
+  --fx-heal-num: #2f6b46;
+}
+/* the ink theme writes in a book face, the whole interface with it */
+body.theme-ink .menu-title,
+body.theme-ink .sheet-head h2,
+body.theme-ink .dialog h2,
+body.theme-ink .float,
+body.theme-ink .ribbon {
+  font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+}
+
+/* --- neon: black glass and light --------------------------------------- */
+body.theme-neon {
+  --bg: #04060c;
+  --bg-2: rgba(13, 21, 38, 0.94);
+  --bg-3: rgba(24, 37, 62, 0.96);
+  --fg: #daf8ff;
+  --fg-2: #a9dbea;
+  --muted: #6f97ad;
+  --line: rgba(80, 230, 255, 0.28);
+  --accent: #37f0ff;
+  --accent-ink: #02222a;
+  --accent-soft: rgba(55, 240, 255, 0.65);
+  --danger: #ff4d6d;
+  --danger-soft: rgba(255, 77, 109, 0.5);
+  --fire: #ffb02e;
+  --fire-soft: rgba(255, 176, 46, 0.5);
+  --heal: #3dffb0;
+  --soft: rgba(80, 230, 255, 0.07);
+  --soft-2: rgba(80, 230, 255, 0.16);
+  --card-bg: linear-gradient(160deg, rgba(15, 25, 45, 0.95), rgba(5, 9, 18, 0.96));
+  --code-bg: #060a14;
+  --scrim: rgba(2, 4, 10, 0.76);
+  --btn-inset: inset 0 0 0 1px rgba(80, 230, 255, 0.16);
+  --btn-drop: 0 0 14px -4px rgba(55, 240, 255, 0.55);
+  --ov-shadow: 0 0 44px rgba(55, 240, 255, 0.2), 0 26px 70px rgba(0, 0, 0, 0.72);
+  --r-btn: 8px;
+  --r-card: 14px;
+  --app-bg:
+    radial-gradient(55% 45% at 12% 6%, rgba(55, 240, 255, 0.2) 0%, rgba(0, 0, 0, 0) 62%),
+    radial-gradient(50% 45% at 90% 12%, rgba(255, 79, 216, 0.2) 0%, rgba(0, 0, 0, 0) 62%),
+    radial-gradient(90% 80% at 50% 110%, #0b1426 0%, #04060c 62%);
+  --title-fg: #b9fbff;
+  --title-shadow: 0 0 18px rgba(55, 240, 255, 0.65), 0 0 40px rgba(55, 240, 255, 0.35);
+  /* the pieces glow instead of casting a shadow */
+  --pc-shadow: drop-shadow(0 0 4px currentColor) drop-shadow(0 0 9px rgba(120, 240, 255, 0.35));
+  --pc-shadow-hi: drop-shadow(0 0 7px currentColor) drop-shadow(0 0 16px rgba(120, 240, 255, 0.5));
+  --pc-shadow-move: drop-shadow(0 0 8px currentColor) drop-shadow(0 0 20px rgba(120, 240, 255, 0.55));
+  --badge-bg: #05101c;
+  --badge-fg: currentColor;
+  --badge-ring: 0 0 0 1px rgba(80, 230, 255, 0.6), 0 0 9px rgba(55, 240, 255, 0.4);
+  --hurt-bg: #ffb02e;
+  --hurt-fg: #2a1a03;
+  --hurt-glow: 0 0 11px rgba(255, 176, 46, 0.75);
+  --str-bg: #2c0718;
+  --str-fg: #ffb3c9;
+  --dot-core: #c2fcff;
+  --dot-halo: rgba(0, 24, 34, 0.6);
+  --dot-glow: rgba(90, 240, 255, 0.85);
+  /* the effects glow with everything else */
+  --fx-glow: drop-shadow(0 0 5px currentColor);
+  --fx-loss: #ff6b8f;
+  --fx-heal-num: #5dffc0;
+  --fx-spark-glow: 0 0 7px currentColor;
+  --fx-frag-glow: 0 0 8px rgba(120, 240, 255, 0.55);
+  --fx-burst: radial-gradient(circle,
+    rgba(255, 255, 255, 0.95) 0%, rgba(55, 240, 255, 0.6) 40%, rgba(55, 240, 255, 0) 70%);
+  --fx-clash: radial-gradient(circle,
+    rgba(255, 255, 255, 0.98) 0%, rgba(255, 79, 216, 0.6) 38%, rgba(255, 79, 216, 0) 70%);
+  --fx-flash: radial-gradient(circle,
+    rgba(190, 252, 255, 0.8) 0%, rgba(55, 240, 255, 0) 68%);
+}
+body.theme-neon .btn--primary,
+body.theme-neon .lang-btn.is-on,
+body.theme-neon .btn--small.is-on {
+  text-shadow: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    0 0 18px -2px rgba(55, 240, 255, 0.8);
+}
+body.theme-neon .menu,
+body.theme-neon .dialog,
+body.theme-neon .sheet,
+body.theme-neon .drawer {
+  border-color: rgba(80, 230, 255, 0.35);
+}
+
+/* --- toy: bright plastic and hard shadows ------------------------------ */
+body.theme-toy {
+  --bg: #ffe9cd;
+  --bg-2: #ffffff;
+  --bg-3: #fff3e0;
+  --fg: #2d2a46;
+  --fg-2: #413e5e;
+  --muted: #8b7fa0;
+  --line: rgba(45, 42, 70, 0.16);
+  --accent: #ff6b8a;
+  --accent-ink: #ffffff;
+  --accent-soft: rgba(255, 107, 138, 0.7);
+  --danger: #ff4d6d;
+  --danger-soft: rgba(255, 77, 109, 0.42);
+  --fire: #ff9f1c;
+  --fire-soft: rgba(255, 159, 28, 0.42);
+  --heal: #22c3a6;
+  --soft: rgba(45, 42, 70, 0.055);
+  --soft-2: rgba(45, 42, 70, 0.11);
+  --card-bg: #fffdf8;
+  --code-bg: #fff6e8;
+  --scrim: rgba(62, 40, 72, 0.42);
+  --btn-inset: inset 0 -3px 0 rgba(45, 42, 70, 0.13);
+  --btn-drop: 0 3px 0 rgba(45, 42, 70, 0.16);
+  --ov-shadow: 0 14px 0 -6px rgba(45, 42, 70, 0.16), 0 30px 60px rgba(62, 40, 72, 0.32);
+  --r-btn: 18px;
+  --r-pill: 999px;
+  --r-card: 26px;
+  --app-bg:
+    radial-gradient(55% 48% at 10% 6%, #ffd36e 0%, rgba(255, 211, 110, 0) 62%),
+    radial-gradient(52% 46% at 92% 10%, #7ee0ff 0%, rgba(126, 224, 255, 0) 64%),
+    radial-gradient(70% 58% at 50% 104%, #ffa5c9 0%, rgba(255, 165, 201, 0) 66%),
+    linear-gradient(162deg, #fff5de 0%, #ffe9f3 100%);
+  --ico-fg: #6a5fd0;
+  --ico-outline: #ffffff;
+  --title-fg: #2d2a46;
+  --title-shadow: 0 3px 0 rgba(255, 168, 196, 0.85);
+  /* a hard offset shadow, the way a sticker sits on a page */
+  --pc-shadow: drop-shadow(2px 3px 0 rgba(45, 30, 20, 0.32));
+  --pc-shadow-hi: drop-shadow(4px 6px 0 rgba(45, 30, 20, 0.3));
+  --pc-shadow-move: drop-shadow(4px 8px 0 rgba(45, 30, 20, 0.28));
+  --badge-bg: #ffffff;
+  --badge-fg: #2d2a46;
+  --badge-ring: 0 0 0 2px #2d2a46, 1px 2px 0 rgba(45, 42, 70, 0.3);
+  --hurt-bg: #ffc233;
+  --hurt-fg: #4a2e00;
+  --str-bg: #ff4d6d;
+  --str-fg: #fff6f8;
+  --dot-core: #ffffff;
+  --dot-halo: rgba(60, 40, 20, 0.5);
+  --fx-loss: #ff3b5c;
+  --fx-heal-num: #14b394;
+  --fx-frag-r: 30%;
+}
+body.theme-toy .btn:active,
+body.theme-toy .preset:active,
+body.theme-toy .theme-btn:active { transform: translateY(3px); box-shadow: none; }
+body.theme-toy .chip,
+body.theme-toy .lang-btn { border-width: 2px; }
+
+/* =====================================================================
+   THEME DECORATION - the board of each theme. The user's square colors
+   stay the base color of every square; all of this is an overlay at a low
+   opacity over them, so a chosen color still reads.
+
+   Each theme fills four slots: the board's own background (the frame),
+   --board-veil (over the grid, under the pieces), --board-over (over the
+   pieces) and .sq::before (the texture of one square).
+   ===================================================================== */
+
+.sq::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* --- classic: a planked wood frame with brass corner studs ------------- */
+.board.theme-classic {
+  --frame-mult: 0.029;
+  --frame-max: 19px;
+  --r-board: 12px;
+  /* brass: a plate at each corner and studs down each band, then two passes
+     of grain, then the plank itself */
+  background-image:
+    radial-gradient(circle at 0 0, #f4dda8 0 18%, #d9b264 34%, #9d7526 46%, rgba(26, 14, 4, 0.9) 50%, rgba(0, 0, 0, 0) 54%),
+    radial-gradient(circle at 100% 0, #f4dda8 0 18%, #d9b264 34%, #9d7526 46%, rgba(26, 14, 4, 0.9) 50%, rgba(0, 0, 0, 0) 54%),
+    radial-gradient(circle at 0 100%, #f4dda8 0 18%, #d9b264 34%, #9d7526 46%, rgba(26, 14, 4, 0.9) 50%, rgba(0, 0, 0, 0) 54%),
+    radial-gradient(circle at 100% 100%, #f4dda8 0 18%, #d9b264 34%, #9d7526 46%, rgba(26, 14, 4, 0.9) 50%, rgba(0, 0, 0, 0) 54%),
+    var(--stud), var(--stud), var(--stud), var(--stud),
+    repeating-linear-gradient(93deg,
+      rgba(0, 0, 0, 0.26) 0 2px,
+      rgba(255, 224, 170, 0.07) 2px 4px,
+      rgba(0, 0, 0, 0.12) 4px 7px),
+    repeating-linear-gradient(87deg,
+      rgba(0, 0, 0, 0.14) 0 6px, rgba(255, 255, 255, 0.04) 6px 13px),
+    linear-gradient(152deg, #7d5732 0%, #543a21 46%, #2a1b10 100%);
+  --stud: radial-gradient(circle closest-side at 50% 46%,
+    #ffeec2 0 11%, #e0bc73 26%, #a8802f 40%, rgba(30, 16, 4, 0.7) 48%,
+    rgba(0, 0, 0, 0) 56%);
+  --stud-run: calc(var(--frame-w) * 2.9);
+  --corner: calc(var(--frame-w) * 2.3);
+  background-size:
+    var(--corner) var(--corner),
+    var(--corner) var(--corner),
+    var(--corner) var(--corner),
+    var(--corner) var(--corner),
+    var(--stud-run) var(--frame-w),
+    var(--stud-run) var(--frame-w),
+    var(--frame-w) var(--stud-run),
+    var(--frame-w) var(--stud-run),
+    auto, auto, auto;
+  background-position:
+    left top, right top, left bottom, right bottom,
+    center top, center bottom, left center, right center, 0 0, 0 0, 0 0;
+  background-repeat:
+    no-repeat, no-repeat, no-repeat, no-repeat,
+    repeat-x, repeat-x, repeat-y, repeat-y, repeat, repeat, no-repeat;
+  --board-shadow:
+    0 24px 52px -14px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 226, 170, 0.18);
+  --board-sink:
+    inset 0 0 0 1px rgba(246, 214, 148, 0.4),
+    inset 0 0 0 2px rgba(0, 0, 0, 0.5),
+    inset 0 9px 14px -11px rgba(0, 0, 0, 0.85),
+    inset 0 -9px 14px -11px rgba(0, 0, 0, 0.55);
+  --board-veil: radial-gradient(128% 128% at 50% 42%,
+    rgba(0, 0, 0, 0) 50%, rgba(42, 22, 6, 0.32) 100%);
+}
+.theme-classic .sq::before {
+  background:
+    repeating-linear-gradient(87deg,
+      rgba(92, 56, 20, 0.1) 0 1px,
+      rgba(255, 255, 255, 0.055) 1px 3px,
+      rgba(92, 56, 20, 0.05) 3px 6px),
+    radial-gradient(135% 105% at 32% -5%,
+      rgba(255, 255, 255, 0.16) 0%, rgba(0, 0, 0, 0) 58%);
+  opacity: 0.6;
+}
+.theme-classic .sq--dark::before { opacity: 0.45; }
+
+/* --- heraldic: parchment squares inside a woven tapestry band ---------- */
+.board.theme-heraldic {
+  --frame-mult: 0.034;
+  --frame-max: 23px;
+  --r-board: 10px;
+  background-image:
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><g fill='none' stroke='%23eec87a' stroke-width='1.5' opacity='.8'><path d='M12 1.2 22.8 12 12 22.8 1.2 12Z'/><path d='M12 6.5 17.5 12 12 17.5 6.5 12Z'/></g><circle cx='12' cy='12' r='2' fill='%23eec87a' opacity='.9'/><circle cx='0' cy='0' r='1.6' fill='%23f5dda2' opacity='.7'/><circle cx='24' cy='0' r='1.6' fill='%23f5dda2' opacity='.7'/><circle cx='0' cy='24' r='1.6' fill='%23f5dda2' opacity='.7'/><circle cx='24' cy='24' r='1.6' fill='%23f5dda2' opacity='.7'/></svg>"),
+    linear-gradient(180deg, rgba(255, 233, 190, 0.2) 0%, rgba(0, 0, 0, 0.3) 100%),
+    linear-gradient(150deg, #8f2f2a 0%, #6b1f1f 55%, #451515 100%);
+  background-size:
+    calc(var(--frame-w) * 1.85) calc(var(--frame-w) * 1.85),
+    auto,
+    auto;
+  background-position: center, 0 0, 0 0;
+  background-repeat: repeat, no-repeat, no-repeat;
+  --board-shadow:
+    0 24px 56px -16px rgba(0, 0, 0, 0.75),
+    0 0 0 1px rgba(60, 24, 16, 0.8),
+    0 0 0 3px rgba(238, 200, 122, 0.25);
+  --board-sink:
+    inset 0 0 0 2px rgba(238, 200, 122, 0.55),
+    inset 0 0 0 3px rgba(62, 26, 16, 0.55),
+    inset 0 10px 16px -12px rgba(48, 22, 8, 0.8);
+  --board-veil:
+    radial-gradient(58% 44% at 22% 16%, rgba(180, 138, 72, 0.16) 0%, rgba(0, 0, 0, 0) 70%),
+    radial-gradient(52% 40% at 80% 82%, rgba(120, 78, 40, 0.14) 0%, rgba(0, 0, 0, 0) 70%),
+    radial-gradient(130% 130% at 50% 45%, rgba(0, 0, 0, 0) 42%, rgba(74, 38, 16, 0.42) 100%);
+}
+.theme-heraldic .sq--light::before {
+  background:
+    repeating-linear-gradient(45deg,
+      rgba(122, 82, 40, 0.55) 0 1px, rgba(0, 0, 0, 0) 1px 7px),
+    radial-gradient(120% 90% at 30% 10%, rgba(255, 246, 220, 0.3), rgba(0, 0, 0, 0) 62%);
+  opacity: 0.4;
+}
+.theme-heraldic .sq--dark::before {
+  background:
+    repeating-linear-gradient(-45deg,
+      rgba(70, 36, 16, 0.55) 0 1px, rgba(0, 0, 0, 0) 1px 9px),
+    repeating-linear-gradient(45deg,
+      rgba(70, 36, 16, 0.3) 0 1px, rgba(0, 0, 0, 0) 1px 14px);
+  opacity: 0.35;
+}
+
+/* --- ink: paper squares inside a wet brushed border -------------------- */
+.board.theme-ink {
+  --frame-mult: 0.032;
+  --frame-max: 19px;
+  --r-board: 4px;
+  /* the band is one wet stroke round the board: the hole in it is a torn
+     line, so the ink meets the paper unevenly the way a loaded brush does */
+  background-image:
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'><path fill='%2316171b' fill-rule='evenodd' d='M0 0H100V100H0Z M2.9 2.4 L13 1.8 L26 2.9 L39 2.0 L52 3.0 L65 1.9 L78 2.8 L89 2.0 L97.3 2.6 L97.9 13 L97.0 26 L98.1 39 L97.1 52 L98.0 65 L97.0 78 L97.8 89 L97.2 97.4 L88 98.0 L75 97.1 L62 98.1 L49 97.0 L36 98.0 L23 97.2 L12 98.1 L2.6 97.5 L2.0 88 L3.0 75 L1.9 62 L2.9 49 L1.8 36 L2.8 23 L2.0 12 Z'/></svg>"),
+    linear-gradient(165deg, #f6f1e4 0%, #eae3d2 100%);
+  background-size: 100% 100%, auto;
+  background-position: 0 0, 0 0;
+  background-repeat: no-repeat, no-repeat;
+  --board-shadow:
+    0 16px 34px -14px rgba(60, 55, 45, 0.6),
+    0 0 0 1px rgba(30, 28, 24, 0.3);
+  --board-sink:
+    inset 0 0 0 1px rgba(30, 30, 34, 0.35),
+    inset 0 5px 9px -8px rgba(40, 38, 32, 0.5);
+  /* one sheet of paper grain over the whole grid, not one per square */
+  --board-veil:
+    url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='p'><feTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='160' height='160' filter='url(%23p)' opacity='.5'/></svg>"),
+    radial-gradient(130% 120% at 50% 45%, rgba(0, 0, 0, 0) 58%, rgba(60, 52, 38, 0.2) 100%);
+  --board-veil-op: 0.55;
+  --board-veil-blend: multiply;
+}
+.theme-ink .sq::before {
+  background:
+    repeating-linear-gradient(0deg,
+      rgba(40, 38, 32, 0.05) 0 1px, rgba(0, 0, 0, 0) 1px 5px),
+    repeating-linear-gradient(90deg,
+      rgba(40, 38, 32, 0.04) 0 1px, rgba(0, 0, 0, 0) 1px 7px);
+  opacity: 0.4;
+}
+.theme-ink .sq--dark::before { opacity: 0.26; }
+
+/* --- neon: dark tiles, glowing grid lines, a scanline over it all ------ */
+.board.theme-neon {
+  --frame-mult: 0.016;
+  --frame-max: 10px;
+  --r-board: 10px;
+  background-image:
+    linear-gradient(160deg, #13294b 0%, #08101f 58%, #04060c 100%);
+  --board-shadow:
+    0 0 36px -6px rgba(55, 240, 255, 0.4),
+    0 18px 46px -14px rgba(0, 0, 0, 0.85),
+    0 0 0 1px rgba(80, 230, 255, 0.4);
+  --board-sink:
+    inset 0 0 0 1px rgba(80, 230, 255, 0.55),
+    inset 0 0 20px rgba(55, 240, 255, 0.18);
+  --board-veil:
+    radial-gradient(70% 55% at 50% 0%, rgba(255, 79, 216, 0.16) 0%, rgba(0, 0, 0, 0) 68%),
+    radial-gradient(70% 55% at 50% 100%, rgba(55, 240, 255, 0.16) 0%, rgba(0, 0, 0, 0) 68%),
+    /* the tiles stay dark whatever colors are chosen: the hue still shows
+       through, but a neon line has something to burn against */
+    linear-gradient(rgba(3, 6, 14, 0.52), rgba(3, 6, 14, 0.52));
+  /* the scanline rides over the pieces too, faint enough to be felt */
+  --board-over: repeating-linear-gradient(0deg,
+    rgba(0, 0, 0, 0.3) 0 1px, rgba(0, 0, 0, 0) 1px 4px);
+  --board-over-op: 0.34;
+}
+.theme-neon .sq::before {
+  box-shadow:
+    inset 0 0 0 1px rgba(90, 240, 255, 0.32),
+    inset 0 0 11px rgba(90, 240, 255, 0.12);
+}
+.theme-neon .sq--light::before {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 120, 230, 0.28),
+    inset 0 0 11px rgba(255, 120, 230, 0.1);
+}
+
+/* --- toy: a fat rounded frame with a dotted band ----------------------- */
+.board.theme-toy {
+  --frame-mult: 0.036;
+  --frame-max: 24px;
+  --r-board: 24px;
+  background-image:
+    radial-gradient(circle at 50% 50%,
+      rgba(255, 255, 255, 0.9) 0 26%, rgba(255, 255, 255, 0) 30%),
+    linear-gradient(135deg, #ffb347 0%, #ff7a8a 36%, #a37bff 72%, #54c8ff 100%);
+  background-size: calc(var(--frame-w) * 0.92) calc(var(--frame-w) * 0.92), auto;
+  background-position: center, 0 0;
+  background-repeat: repeat, no-repeat;
+  --board-shadow:
+    0 12px 0 -3px rgba(45, 42, 70, 0.2),
+    0 28px 48px -18px rgba(70, 50, 90, 0.55),
+    0 0 0 2px rgba(255, 255, 255, 0.5);
+  --board-sink:
+    inset 0 0 0 3px rgba(255, 255, 255, 0.8),
+    inset 0 0 0 5px rgba(45, 42, 70, 0.16);
+  --board-veil: radial-gradient(120% 120% at 50% 40%,
+    rgba(255, 255, 255, 0.1) 0%, rgba(90, 60, 110, 0.14) 100%);
+}
+.theme-toy .sq::before {
+  background:
+    radial-gradient(125% 85% at 50% 8%,
+      rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0) 58%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0) 55%, rgba(60, 40, 20, 0.1) 100%);
+}
+/* the fragments of a broken toy are chunky and bounce */
+body.theme-toy .frag {
+  animation-name: fragBounce;
+  animation-duration: 0.58s;
+  animation-timing-function: cubic-bezier(0.3, 1.5, 0.55, 1);
+}
+@keyframes fragBounce {
+  0% { transform: translate(-50%, -50%) rotate(0deg) scale(1.2); opacity: 1; }
+  35% {
+    transform: translate(calc(-50% + var(--dx) * 0.6), calc(-50% - var(--sq) * 0.22))
+               rotate(calc(var(--rot) * 0.4)) scale(1.1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy)))
+               rotate(var(--rot)) scale(0.9);
+    opacity: 0;
+  }
 }
 
 /* --------------------------------------------------- motion switches --- */

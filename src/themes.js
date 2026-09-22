@@ -81,10 +81,12 @@ window.WarGame = window.WarGame || {};
     '<circle cx="74" cy="41" r="3.2" style="' + C_DETAIL + '"/>';
 
   var C_ARCHER = '<g style="' + C_BODY + '">' +
+    /* the bow's limbs are a shade thicker than the emblem in icons.js, so the
+       arc still reads as a bow and not as an arch at 40 px */
     '<path d="M16,82 C12,72 11,60 13,48 C16,32 30,22 50,22 ' +
     'C70,22 84,32 87,48 C89,60 88,72 84,82 ' +
-    'L76,76 C79,67 80,58 78,50 C75,37 65,31 50,31 ' +
-    'C35,31 25,37 22,50 C20,58 21,67 24,76 Z"/>' +
+    'L73,75 C76,66 77,57 75,50 C72,38 63,34 50,34 ' +
+    'C37,34 28,38 25,50 C23,57 24,66 27,75 Z"/>' +
     '<path d="M19,78 L50,86 L81,78 L81.5,81 L50,89.5 L18.5,81 Z" ' +
     'style="stroke-width:2.2"/>' +
     '<path d="M46.5,68 L39,80 L39,71.5 L46.5,61 Z ' +
@@ -108,122 +110,120 @@ window.WarGame = window.WarGame || {};
 
   var H_LINE = 'stroke:var(--piece-outline,#1b1d24);stroke-width:3;' +
     'stroke-linejoin:round;stroke-linecap:round';
-  var H_OWN = 'fill:currentColor;' + H_LINE;
-  var H_STEEL = 'fill:#c9ced6;' + H_LINE;
-  var H_WOOD = 'fill:#8a5a3c;' + H_LINE;
-  var H_HIDE = 'fill:#9c6a45;' + H_LINE;
-  var H_SKIN = 'fill:#e8c39e;' + H_LINE;
-  var H_SHADE = 'fill:#000;fill-opacity:0.2;stroke:none';
-  var H_DARK = 'fill:var(--piece-outline,#1b1d24);stroke:none';
+  /* the stroke is set once on the group, so each shape carries only its fill */
+  var OWN = ' fill="currentColor"';
+  var STEEL = ' fill="#c9ced6"';
+  var WOOD = ' fill="#8a5a3c"';
+  var HIDE = ' fill="#9c6a45"';
+  var DHIDE = ' fill="#6f4630"';
+  var SKIN = ' fill="#e8c39e"';
+  var SHADE = ' fill="#000" fill-opacity=".2" stroke="none"';
+  /* a detail on a fixed accent (a visor slit on steel, an eye on a hide) keeps
+     a fixed dark, so it does not turn pale on a dark owner */
+  var INK = ' fill="#2b2f38" stroke="none"';
+  var HOOF = ' fill="#4a2e1e" stroke="none"';
 
-  var H_SOLDIER =
+  function her(inner) {
+    return '<g style="' + H_LINE + '">' + inner + '</g>';
+  }
+
+  var H_SOLDIER = her(
     /* the raised sword, behind the arm that holds it */
-    '<g style="' + H_STEEL + '">' +
-      '<path d="M79,3 L84.5,13 V41 H73.5 V13 Z"/>' +
+    '<g' + STEEL + '><path d="M79,3 L84.5,13 V41 H73.5 V13 Z"/>' +
       '<rect x="66" y="41" width="26" height="6.5" rx="3.2"/>' +
-      '<circle cx="79" cy="62" r="4.4"/></g>' +
-    '<rect x="75.5" y="46" width="7" height="13" rx="3.5" style="' + H_WOOD + '"/>' +
+      '<circle cx="79" cy="64" r="4.4"/></g>' +
+    '<rect x="75.5" y="47" width="7" height="14" rx="3.5"' + WOOD + '/>' +
     /* legs and boots */
-    '<g style="' + H_STEEL + '"><path d="M36,64 H47 V83 H36 Z"/>' +
+    '<g' + STEEL + '><path d="M36,64 H47 V83 H36 Z"/>' +
       '<path d="M53,64 H64 V83 H53 Z"/></g>' +
-    '<g style="' + H_WOOD + '"><path d="M33,80 H47 V92 H33 Z"/>' +
+    '<g' + WOOD + '><path d="M33,80 H47 V92 H33 Z"/>' +
       '<path d="M53,80 H67 V92 H53 Z"/></g>' +
     /* tabard, its shaded side, the belt */
-    '<path d="M36,30 C42,27 58,27 64,30 L67,50 L65,70 H35 L33,50 Z" ' +
-      'style="' + H_OWN + '"/>' +
-    '<path d="M50,28 C57,28 62,29 64,30 L67,50 L65,70 H50 Z" style="' + H_SHADE + '"/>' +
-    '<rect x="32.5" y="51" width="35" height="7.5" rx="2.5" style="' + H_WOOD + '"/>' +
-    '<rect x="44" y="50.5" width="12" height="8.5" rx="2.5" style="' + H_STEEL + '"/>' +
+    '<path d="M36,30 C42,27 58,27 64,30 L67,50 L65,70 H35 L33,50 Z"' + OWN + '/>' +
+    '<path d="M50,28 C57,28 62,29 64,30 L67,50 L65,70 H50 Z"' + SHADE + '/>' +
+    '<rect x="32.5" y="51" width="35" height="7.5" rx="2.5"' + WOOD + '/>' +
+    '<rect x="44" y="50.5" width="12" height="8.5" rx="2.5"' + STEEL + '/>' +
     /* the sword arm and its hand */
-    '<path d="M62,31 C70,32 77,39 81,47 L71,52 C68,45 65,40 59,39 Z" ' +
-      'style="' + H_OWN + '"/>' +
-    '<rect x="71.5" y="45" width="12" height="12" rx="5.5" style="' + H_SKIN + '"/>' +
-    /* helmet, plume, visor */
-    '<path d="M49,8 C46,2 52,-1 56,2 C60,6 56,11 51,11 Z" style="' + H_OWN + '"/>' +
+    '<path d="M62,31 C70,32 77,39 81,47 L71,52 C68,45 65,40 59,39 Z"' + OWN + '/>' +
+    '<rect x="71.5" y="47.5" width="12" height="12" rx="5.5"' + SKIN + '/>' +
+    /* plume, helmet, visor */
+    '<path d="M49,8 C46,2 52,-1 56,2 C60,6 56,11 51,11 Z"' + OWN + '/>' +
     '<path d="M38,24 C38,12 43,7 50,7 C57,7 62,12 62,24 L62,32 ' +
-      'C56,35 44,35 38,32 Z" style="' + H_STEEL + '"/>' +
-    '<rect x="40" y="19" width="20" height="5" rx="2.4" style="' + H_DARK + '"/>' +
+      'C56,35 44,35 38,32 Z"' + STEEL + '/>' +
+    '<rect x="40" y="19" width="20" height="5" rx="2.4"' + INK + '/>' +
     /* the shield, in front of everything on that side */
-    '<path d="M9,31 H41 V54 C41,68 30,76 25,79 C20,76 9,68 9,54 Z" ' +
-      'style="' + H_OWN + '"/>' +
-    '<path d="M25,31 H41 V54 C41,68 30,76 25,79 Z" style="' + H_SHADE + '"/>' +
-    '<circle cx="25" cy="50" r="5.5" style="' + H_STEEL + '"/>';
+    '<path d="M9,31 H41 V54 C41,68 30,76 25,79 C20,76 9,68 9,54 Z"' + OWN + '/>' +
+    '<path d="M25,31 H41 V54 C41,68 30,76 25,79 Z"' + SHADE + '/>' +
+    '<circle cx="25" cy="50" r="5.5"' + STEEL + '/>');
 
-  var H_KNIGHT =
-    '<path d="M27,47 C17,49 10,60 11,75 L18,73 C17,61 21,54 29,53 Z" ' +
-      'style="' + H_WOOD + '"/>' +
+  var H_KNIGHT = her(
+    '<path d="M24,44 C14,47 8,58 9,73 L16,71 C15,59 19,51 26,50 Z"' + WOOD + '/>' +
     /* the far pair of legs, one shade down */
-    '<g style="fill:#6f4630;' + H_LINE + '">' +
-      '<path d="M31,58 H39 L37,73 L41,87 L34,90 L28,73 Z"/>' +
-      '<path d="M57,58 H65 L67,73 L65,87 H58 L59,73 Z"/></g>' +
-    /* barrel, near legs, neck and head */
-    '<path d="M24,55 C24,46 34,42 48,42 H62 C67,42 70,46 70,53 ' +
-      'C70,63 64,69 52,69 H36 C29,69 24,62 24,55 Z" style="' + H_HIDE + '"/>' +
-    '<g style="' + H_HIDE + '">' +
-      '<path d="M36,62 H45 L43,76 L46,88 H38 L34,76 Z"/>' +
-      '<path d="M53,62 H62 L63,76 L61,88 H54 L55,76 Z"/></g>' +
-    '<g style="' + H_DARK + '"><rect x="33" y="86" width="14" height="6" rx="2"/>' +
-      '<rect x="53" y="86" width="12" height="6" rx="2"/>' +
-      '<rect x="27" y="86" width="14" height="6" rx="2"/></g>' +
-    '<path d="M72,20 L70,11 L79,18 Z" style="' + H_HIDE + '"/>' +
-    '<path d="M58,47 C60,39 63,31 68,24 C70,20 75,19 78,22 L88,31 ' +
-      'C91,34 91,39 88,41 L78,47 C73,51 66,53 60,52 Z" style="' + H_HIDE + '"/>' +
-    '<path d="M62,29 C58,37 57,45 58,52 L65,50 C64,44 65,36 69,28 Z" ' +
-      'style="' + H_SHADE + '"/>' +
-    '<circle cx="79" cy="31" r="2.8" style="' + H_DARK + '"/>' +
+    '<g' + DHIDE + '><path d="M27,54 H37 L35,72 L39,88 H31 L25,72 Z"/>' +
+      '<path d="M55,54 H65 L67,72 L65,88 H57 L58,72 Z"/></g>' +
+    /* the barrel and the near pair of legs */
+    '<g' + HIDE + '><path d="M22,50 C22,42 30,37 44,37 H58 C65,37 69,42 69,50 ' +
+      'C69,60 62,66 50,66 H34 C26,66 22,58 22,50 Z"/>' +
+      '<path d="M33,60 H43 L41,75 L44,90 H36 L31,75 Z"/>' +
+      '<path d="M50,60 H60 L61,75 L59,90 H51 L52,75 Z"/></g>' +
+    '<g' + HOOF + '><rect x="24" y="83" width="15" height="6" rx="2"/>' +
+      '<rect x="55" y="83" width="13" height="6" rx="2"/>' +
+      '<rect x="30" y="85" width="15" height="6" rx="2"/>' +
+      '<rect x="49" y="85" width="13" height="6" rx="2"/></g>' +
+    /* the neck, then the head over it, each its own path, so the outline draws
+       the line between them and the horse does not read as one lump */
+    '<path d="M47,57 C49,43 53,31 60,24 L73,31 C68,38 64,47 62,59 Z"' + HIDE + '/>' +
+    '<path d="M60,24 C54,32 50,43 49,57 L56,57 C57,46 60,36 66,29 Z"' + SHADE + '/>' +
+    '<g' + HIDE + '><path d="M67,12 L65,2 L75,10 Z"/>' +
+      '<path d="M63,14 C67,10 73,10 77,14 L87,24 C91,28 90,36 85,37 ' +
+      'L71,38 C65,38 61,34 60,28 C59,22 60,17 63,14 Z"/></g>' +
+    '<g' + INK + '><circle cx="74" cy="23" r="2.8"/>' +
+      '<circle cx="85" cy="30" r="2"/></g>' +
     /* the caparison, the owner color on the horse */
-    '<path d="M31,42 H66 L68,55 L67,71 L63,61 L59,71 L55,61 L51,71 ' +
-      'L47,61 L43,71 L39,61 L35,70 L30,57 Z" style="' + H_OWN + '"/>' +
-    '<path d="M50,42 H66 L68,55 L67,71 L63,61 L59,71 L55,61 L51,71 L50,69 Z" ' +
-      'style="' + H_SHADE + '"/>' +
-    /* the rider */
-    '<path d="M40,37 L51,35 L54,53 L44,56 Z" style="' + H_STEEL + '"/>' +
-    '<path d="M42,52 L54,50 L56,59 L44,62 Z" style="' + H_WOOD + '"/>' +
-    '<path d="M35,19 C40,16 48,16 52,19 L56,38 C48,42 40,42 34,38 Z" ' +
-      'style="' + H_STEEL + '"/>' +
-    '<path d="M44,17 C48,17 51,18 52,19 L56,38 C52,40 48,41 44,41 Z" ' +
-      'style="' + H_SHADE + '"/>' +
-    '<g transform="rotate(24 60 30)"><g style="' + H_STEEL + '">' +
-      '<path d="M60,1 L64.5,9 V25 H55.5 V9 Z"/>' +
-      '<rect x="51" y="25" width="18" height="5" rx="2.5"/></g>' +
-      '<rect x="57" y="29" width="6" height="9" rx="3" style="' + H_WOOD + '"/></g>' +
-    '<path d="M49,21 C55,21 59,25 61,31 L53,35 C51,30 49,28 45,28 Z" ' +
-      'style="' + H_STEEL + '"/>' +
-    '<path d="M37,6 C32,5 32,0 37,0 C41,0 43,4 42,7 Z" style="' + H_OWN + '"/>' +
-    '<path d="M36,8 C36,2 41,-1 46,0 C51,1 54,5 54,11 L53,19 ' +
-      'C47,21 40,21 36,19 Z" style="' + H_STEEL + '"/>' +
-    '<rect x="38" y="8" width="15" height="4.5" rx="2.2" style="' + H_DARK + '"/>';
+    '<path d="M27,37 H64 L68,52 L66,71 L60,61 L53,71 L46,61 L39,71 ' +
+      'L33,61 L27,53 Z"' + OWN + '/>' +
+    '<path d="M50,37 H64 L68,52 L66,71 L60,61 L53,71 L50,67 Z"' + SHADE + '/>' +
+    /* the rider: his surcoat and the caparison in his color, the rest steel */
+    '<path d="M37,32 L48,30 L51,49 L41,52 Z"' + STEEL + '/>' +
+    '<path d="M38,47 L51,45 L53,55 L41,58 Z"' + WOOD + '/>' +
+    '<path d="M33,15 C38,12 46,12 50,15 L54,34 C46,38 38,38 32,34 Z"' + OWN + '/>' +
+    '<path d="M42,13 C46,13 49,14 50,15 L54,34 C50,36 46,37 42,37 Z"' + SHADE + '/>' +
+    '<g transform="rotate(-13 26 30)"><g' + STEEL + '>' +
+      '<path d="M26,2 L30.5,10 V26 H21.5 V10 Z"/>' +
+      '<rect x="17" y="26" width="18" height="5" rx="2.5"/></g>' +
+      '<rect x="23" y="30" width="6" height="9" rx="3"' + WOOD + '/></g>' +
+    '<path d="M37,18 C31,18 27,22 25,28 L33,32 C35,28 37,26 41,26 Z"' + OWN + '/>' +
+    '<circle cx="27" cy="31" r="5.4"' + SKIN + '/>' +
+    '<path d="M32,7 C32,2 37,-1 42,0 C47,1 50,5 50,11 L49,18 ' +
+      'C44,20 37,20 32,18 Z"' + STEEL + '/>' +
+    '<rect x="34" y="7" width="15" height="4.5" rx="2.2"' + INK + '/>');
 
-  var H_ARCHER =
+  var H_ARCHER = her(
     /* the bow, then the string it is drawn by */
-    '<path d="M77,9 C90,27 90,73 77,91 L71,87 C83,70 83,30 71,13 Z" ' +
-      'style="' + H_WOOD + '"/>' +
-    '<path d="M75,11 L45,50 L75,89" style="fill:none;stroke:var(--piece-outline,#1b1d24);' +
-      'stroke-width:2.4;stroke-linejoin:round"/>' +
-    /* the back leg, the front leg, the boots */
-    '<g style="' + H_WOOD + '"><path d="M22,64 H33 L31,83 H20 Z"/>' +
+    '<path d="M77,9 C90,27 90,73 77,91 L71,87 C83,70 83,30 71,13 Z"' + WOOD + '/>' +
+    '<path d="M75,11 L45,50 L75,89" fill="none" stroke-width="2.4"/>' +
+    /* the two legs and the boots */
+    '<g' + WOOD + '><path d="M22,64 H33 L31,83 H20 Z"/>' +
       '<path d="M40,64 H51 L53,83 H42 Z"/></g>' +
-    '<g style="' + H_DARK + '"><rect x="16" y="81" width="17" height="8" rx="3"/>' +
+    '<g' + HOOF + '><rect x="16" y="81" width="17" height="8" rx="3"/>' +
       '<rect x="39" y="81" width="17" height="8" rx="3"/></g>' +
-    /* tunic */
-    '<path d="M22,31 C28,28 42,28 47,31 L51,50 L49,70 H21 L19,50 Z" ' +
-      'style="' + H_OWN + '"/>' +
-    '<path d="M36,29 C42,29 46,30 47,31 L51,50 L49,70 H36 Z" style="' + H_SHADE + '"/>' +
-    '<rect x="18.5" y="51" width="32" height="7" rx="2.5" style="' + H_WOOD + '"/>' +
+    /* tunic and belt */
+    '<path d="M22,31 C28,28 42,28 47,31 L51,50 L49,70 H21 L19,50 Z"' + OWN + '/>' +
+    '<path d="M36,29 C42,29 46,30 47,31 L51,50 L49,70 H36 Z"' + SHADE + '/>' +
+    '<rect x="18.5" y="51" width="32" height="7" rx="2.5"' + WOOD + '/>' +
     /* the face inside the hood, then the hood over it */
-    '<ellipse cx="40" cy="22" rx="9" ry="10" style="' + H_SKIN + '"/>' +
+    '<ellipse cx="40" cy="22" rx="9" ry="10"' + SKIN + '/>' +
     '<path d="M22,22 C22,11 28,5 36,5 C43,5 48,9 49,16 L43,18 ' +
-      'C41,13 36,12 32,15 C28,18 27,27 29,33 L23,34 Z" style="' + H_OWN + '"/>' +
-    /* the arm that holds the bow, and the arm that draws the string */
-    '<path d="M38,40 C52,40 64,44 73,49 L70,57 C61,53 50,49 37,49 Z" ' +
-      'style="' + H_OWN + '"/>' +
-    '<rect x="66" y="44" width="12" height="12" rx="5.5" style="' + H_SKIN + '"/>' +
-    /* the arrow on the string */
-    '<rect x="42" y="47" width="44" height="5" rx="2.4" style="' + H_WOOD + '"/>' +
-    '<path d="M83,43 L95,49.5 L83,56 Z" style="' + H_STEEL + '"/>' +
-    '<path d="M44,43 L37,46 L37,53 L44,56 Z" style="' + H_OWN + '"/>' +
-    '<path d="M28,38 L40,41 L45,49 L34,53 Z" style="' + H_OWN + '"/>' +
-    '<rect x="39" y="43" width="11" height="12" rx="5" style="' + H_SKIN + '"/>';
+      'C41,13 36,12 32,15 C28,18 27,27 29,33 L23,34 Z"' + OWN + '/>' +
+    /* the arm that holds the bow out, and its hand */
+    '<path d="M38,40 C52,40 64,44 73,49 L70,57 C61,53 50,49 37,49 Z"' + OWN + '/>' +
+    '<rect x="66" y="44" width="12" height="12" rx="5.5"' + SKIN + '/>' +
+    /* the arrow, then the arm that draws the string back */
+    '<rect x="42" y="47" width="44" height="5" rx="2.4"' + WOOD + '/>' +
+    '<path d="M83,43 L95,49.5 L83,56 Z"' + STEEL + '/>' +
+    '<path d="M44,43 L37,46 L37,53 L44,56 Z"' + OWN + '/>' +
+    '<path d="M28,38 L40,41 L45,49 L34,53 Z"' + OWN + '/>' +
+    '<rect x="39" y="43" width="11" height="12" rx="5"' + SKIN + '/>');
 
   var HERALDIC = make({
     id: 'heraldic',
@@ -239,15 +239,16 @@ window.WarGame = window.WarGame || {};
      displaced with it, so the edge frays the way wet ink does. */
 
   var I_LINE = 'fill:currentColor;stroke:var(--piece-outline,#1b1d24);' +
-    'stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round';
-  var I_WASH = 'fill:#000;fill-opacity:0.18;stroke:none';
+    'stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round';
+  var I_HAIR = 'fill:none;stroke:var(--piece-outline,#1b1d24);stroke-width:2.6;' +
+    'stroke-linejoin:round;stroke-linecap:round';
 
   function inkDefs(kind, seed) {
-    return '<filter id="wg-ink-' + kind + '-r" x="-15%" y="-15%" ' +
-      'width="130%" height="130%" color-interpolation-filters="sRGB">' +
-      '<feTurbulence type="fractalNoise" baseFrequency="0.07" numOctaves="1" ' +
-      'seed="' + seed + '" result="n"/>' +
-      '<feDisplacementMap in="SourceGraphic" in2="n" scale="3.4" ' +
+    return '<filter id="wg-ink-' + kind + '-r" x="-18%" y="-18%" ' +
+      'width="136%" height="136%" color-interpolation-filters="sRGB">' +
+      '<feTurbulence type="fractalNoise" baseFrequency="0.035 0.05" ' +
+      'numOctaves="2" seed="' + seed + '" result="n"/>' +
+      '<feDisplacementMap in="SourceGraphic" in2="n" scale="5" ' +
       'xChannelSelector="R" yChannelSelector="G"/></filter>';
   }
 
@@ -256,35 +257,36 @@ window.WarGame = window.WarGame || {};
       inner + '</g>';
   }
 
+  /* Soldier: two crossed strokes for the swords, one loaded stroke for the
+     shield over them, so only the four ends show, as on the classic emblem. */
+  function inkSword(angle) {
+    return '<g transform="rotate(' + angle + ' 50 50)">' +
+      '<path d="M50,1 L56,16 V82 L50,97 L44,82 V16 Z"/>' +
+      '<path d="M33,15 L67,19 L66,27 L34,23 Z"/>' +
+      '<path d="M45,0 L55,2 L54,13 L46,12 Z"/></g>';
+  }
+
   var I_SOLDIER = inkWrap('S',
-    /* the sword: one diagonal stroke, thin where the brush lifts */
-    '<path d="M9,93 L17,84 C39,65 61,43 79,21 L93,6 L85,25 ' +
-      'C67,47 45,69 23,88 Z"/>' +
-    /* the shield: one loaded stroke, dragged down to the point */
-    '<path d="M15,25 C31,18 69,18 85,25 C85,52 79,75 50,94 ' +
-      'C21,75 15,52 15,25 Z"/>' +
-    '<path d="M50,26 C68,26 80,25 85,25 C85,52 79,75 50,94 Z" style="' + I_WASH + '"/>');
+    inkSword(38) + inkSword(-38) +
+    '<path d="M21,35 C34,30 66,30 79,35 L79,58 C79,75 67,87 50,94 ' +
+      'C33,87 21,75 21,58 Z"/>');
 
+  /* Knight: the horse head in one stroke. */
   var I_KNIGHT = inkWrap('K',
-    '<path d="M27,91 C24,72 29,54 42,44 C50,38 55,29 56,20 ' +
-      'C56,14 62,12 65,17 C67,20 67,24 66,28 ' +
-      'C71,22 78,23 82,29 C87,37 89,46 89,52 C89,57 85,60 79,60 ' +
-      'L64,60 C58,62 55,66 55,74 L55,91 Z"/>' +
-    '<path d="M55,74 C55,66 58,62 64,60 L79,60 C85,60 89,57 89,52 ' +
-      'C89,46 87,37 82,29 L88,44 C89,52 85,66 74,70 C64,74 57,80 55,91 Z" ' +
-      'style="' + I_WASH + '"/>' +
-    '<path d="M22,92 C14,88 9,80 8,70 L15,72 C16,79 19,85 25,88 Z"/>' +
-    '<circle cx="74" cy="41" r="3.4" style="fill:var(--piece-outline,#1b1d24);stroke:none"/>');
+    '<path d="M25,93 C22,72 28,53 42,43 C50,37 55,28 56,19 ' +
+      'C56,13 62,11 65,16 C67,19 67,23 66,27 ' +
+      'C71,21 79,22 83,28 C88,36 90,46 90,52 C90,58 86,61 79,61 ' +
+      'L64,61 C58,63 55,67 55,75 L55,93 Z"/>' +
+    '<circle cx="75" cy="41" r="3.4" style="fill:var(--piece-outline,#1b1d24);stroke:none"/>');
 
+  /* Archer: the bow in one crescent stroke, the arrow in a second. */
   var I_ARCHER = inkWrap('A',
-    /* the bow: a crescent thick at the belly, thin at the tips */
-    '<path d="M26,7 C50,26 58,40 58,50 C58,61 50,75 26,94 L19,88 ' +
-      'C41,71 49,60 49,50 C49,41 41,30 20,13 Z"/>' +
-    /* the string drawn back, and the arrow lying on it */
-    '<path d="M24,9 L12,50 L24,92 L27,90 L17,50 L27,11 Z" style="stroke-width:1.6"/>' +
-    '<path d="M13,46 L83,47 L83,53 L13,54 Z"/>' +
-    '<path d="M79,39 L97,50 L79,61 Z"/>' +
-    '<path d="M16,40 L7,45 L7,55 L16,60 Z"/>');
+    '<path d="M27,6 C51,26 59,40 59,50 C59,61 51,75 27,95 L19,88 ' +
+      'C41,70 50,60 50,50 C50,41 41,31 20,13 Z"/>' +
+    '<path d="M24,8 L15,50 L24,93" style="' + I_HAIR + '"/>' +
+    '<path d="M16,46 L82,47 L82,54 L16,55 Z"/>' +
+    '<path d="M78,38 L97,50.5 L78,62 Z"/>' +
+    '<path d="M29,40 L17,45 L29,50 Z M29,52 L17,56 L29,61 Z"/>');
 
   var INK = make({
     id: 'ink',
@@ -318,10 +320,9 @@ window.WarGame = window.WarGame || {};
   }
 
   var N_S_PATHS =
-    '<path d="M18,14 L30,26 M70,26 L82,14"/>' +
-    '<path d="M12,20 L24,8 M76,8 L88,20"/>' +
-    '<path d="M62,66 L74,88 M38,66 L26,88"/>' +
-    '<path d="M22,34 H78 V56 C78,74 66,86 50,92 C34,86 22,74 22,56 Z"/>';
+    '<path d="M50,4 V29 M34,16 H66 M50,76 V88"/>' +
+    '<path d="M44,84 L50,96 L56,84"/>' +
+    '<path d="M22,30 H78 V52 C78,67 66,77 50,83 C34,77 22,67 22,52 Z"/>';
 
   var N_K_PATHS =
     '<path d="M29,90 C26,72 31,55 43,45 C51,39 56,30 57,21 ' +
@@ -361,51 +362,54 @@ window.WarGame = window.WarGame || {};
   var T_HI = 'fill:#fff;fill-opacity:0.55;stroke:none';
   var T_DARK = 'fill:var(--piece-outline,#1b1d24);stroke:none';
 
+  /* the token itself: head, neck, two arms out, two legs with a notch */
   var T_MEEPLE =
-    '<path d="M50,38 C63,38 73,47 77,59 L80,74 C81,80 77,84 71,83 ' +
-      'L64,81 L63,91 C63,94 61,96 58,96 H42 C39,96 37,94 37,91 ' +
-      'L36,81 L29,83 C23,84 19,80 20,74 L23,59 C27,47 37,38 50,38 Z"/>' +
-    '<circle cx="50" cy="22" r="15"/>';
+    '<path d="M50,8 C57,8 62,14 62,21 C62,26 59,30 56,32 ' +
+      'C62,34 67,39 70,45 L79,43 C84,42 88,46 87,51 C86,56 82,58 77,57 ' +
+      'L70,55 L72,76 C73,82 69,86 63,86 H56 L55,94 H45 L44,86 H37 ' +
+      'C31,86 27,82 28,76 L30,55 L23,57 C18,58 14,56 13,51 ' +
+      'C12,46 16,42 21,43 L30,45 C33,39 38,34 44,32 ' +
+      'C41,30 38,26 38,21 C38,14 43,8 50,8 Z"/>';
+
+  var T_HILIGHT = '<ellipse cx="43" cy="16" rx="5.5" ry="4" ' +
+    'transform="rotate(-25 43 16)" style="' + T_HI + '"/>';
 
   var T_SOLDIER =
-    /* the sword over the shoulder */
-    '<g style="' + T_WOOD + '"><rect x="74" y="12" width="13" height="40" rx="6.5"/>' +
-      '<rect x="64" y="46" width="33" height="10" rx="5"/></g>' +
+    /* the wooden sword in the right hand */
+    '<g style="' + T_WOOD + '"><rect x="74" y="5" width="16" height="32" rx="8"/>' +
+      '<rect x="65" y="33" width="34" height="11" rx="5.5"/></g>' +
     '<g style="' + T_OWN + '">' + T_MEEPLE + '</g>' +
-    /* the little shield */
-    '<path d="M6,40 H37 V58 C37,70 26,77 21.5,79 C17,77 6,70 6,58 Z" ' +
+    /* the little shield on the left hand */
+    '<path d="M4,34 H34 V55 C34,67 24,74 19,77 C14,74 4,67 4,55 Z" ' +
       'style="' + T_OWN + '"/>' +
-    '<circle cx="21.5" cy="56" r="6" style="' + T_DARK + '"/>' +
-    '<ellipse cx="43" cy="15" rx="5.5" ry="4" transform="rotate(-25 43 15)" ' +
-      'style="' + T_HI + '"/>';
+    '<circle cx="19" cy="53" r="6" style="' + T_DARK + '"/>' +
+    T_HILIGHT;
 
   var T_KNIGHT =
     '<g style="' + T_OWN + '">' +
-      /* head, neck and barrel in one chunky body */
-      '<path d="M57,8 C68,8 76,16 76,27 L76,36 C76,40 73,43 69,43 ' +
-        'L64,43 C66,47 67,51 67,55 L67,64 C67,70 62,74 56,74 H34 ' +
-        'C27,74 22,69 22,62 L22,50 C22,40 29,32 39,30 L45,29 ' +
-        'C46,17 50,8 57,8 Z"/>' +
-      /* the rocker */
-      '<path d="M8,78 C24,92 76,92 92,78 L92,88 C74,99 26,99 8,88 Z"/>' +
+      /* the rocker, then the legs, body, neck and head over it */
+      '<path d="M8,72 C25,89 75,89 92,72 L92,82 C74,97 26,97 8,82 Z"/>' +
+      '<rect x="27" y="58" width="15" height="22" rx="7"/>' +
+      '<rect x="56" y="58" width="15" height="22" rx="7"/>' +
+      '<path d="M22,44 C22,38 27,34 34,34 H54 C61,34 66,39 66,46 V58 ' +
+        'C66,65 61,69 54,69 H34 C27,69 22,64 22,58 Z"/>' +
+      '<path d="M66,8 L70,15 C76,17 80,23 80,30 L81,36 C82,41 78,44 73,43 ' +
+        'L64,41 L58,50 L47,50 L49,32 C50,20 56,11 66,8 Z"/>' +
     '</g>' +
-    '<rect x="30" y="68" width="12" height="16" rx="5" style="' + T_OWN + '"/>' +
-    '<rect x="56" y="68" width="12" height="16" rx="5" style="' + T_OWN + '"/>' +
-    '<circle cx="64" cy="26" r="4" style="' + T_DARK + '"/>' +
-    '<ellipse cx="38" cy="45" rx="7" ry="4.5" transform="rotate(-20 38 45)" ' +
+    '<path d="M60,14 C54,22 51,32 51,44 L57,42 C57,31 60,23 65,17 Z" ' +
+      'style="fill:#000;fill-opacity:0.18;stroke:none"/>' +
+    '<circle cx="71" cy="27" r="4" style="' + T_DARK + '"/>' +
+    '<ellipse cx="36" cy="45" rx="8" ry="5" transform="rotate(-16 36 45)" ' +
       'style="' + T_HI + '"/>';
 
   var T_ARCHER =
-    /* the bow and its string, behind the token */
-    '<path d="M74,16 C92,32 92,68 74,84 L64,76 C78,64 78,36 64,24 Z" ' +
+    /* the bow and its string, held out in the right hand */
+    '<path d="M79,12 C95,29 95,71 79,88 L70,81 C83,67 83,33 70,19 Z" ' +
       'style="' + T_WOOD + '"/>' +
-    '<path d="M70,20 L46,50 L70,80" style="fill:none;stroke:var(--piece-outline,#1b1d24);' +
-      'stroke-width:4;stroke-linejoin:round"/>' +
+    '<path d="M75,16 L63,50 L75,84" style="fill:none;' +
+      'stroke:var(--piece-outline,#1b1d24);stroke-width:4;stroke-linejoin:round"/>' +
     '<g style="' + T_OWN + '">' + T_MEEPLE + '</g>' +
-    '<g style="' + T_WOOD + '"><rect x="26" y="44" width="62" height="10" rx="5"/></g>' +
-    '<path d="M84,38 L99,49 L84,60 Z" style="' + T_OWN + '"/>' +
-    '<ellipse cx="43" cy="15" rx="5.5" ry="4" transform="rotate(-25 43 15)" ' +
-      'style="' + T_HI + '"/>';
+    T_HILIGHT;
 
   var TOY = make({
     id: 'toy',

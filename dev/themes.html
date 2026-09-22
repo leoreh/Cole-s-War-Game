@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>War Game - theme glyphs</title>
+<style>
+  :root {
+    --p0: #efe6cf; --p0-outline: #22252e;
+    --p1: #2f3550; --p1-outline: #e7e3d6;
+    --bg: #1b1e26; --fg: #e7e3d6;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 16px 20px 60px;
+    background: var(--bg); color: var(--fg);
+    font: 13px/1.45 system-ui, -apple-system, Segoe UI, sans-serif;
+  }
+  h1 { font-size: 16px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0; }
+  .bar {
+    position: sticky; top: 0; z-index: 5;
+    background: var(--bg); padding: 8px 0 10px;
+    border-bottom: 1px solid #333844; margin-bottom: 14px;
+    display: flex; gap: 18px; align-items: center; flex-wrap: wrap;
+  }
+  label { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+  .theme { margin: 0 0 26px; border: 1px solid #333844; border-radius: 10px; overflow: hidden; }
+  .theme > header {
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+    padding: 8px 12px; background: #232733; border-bottom: 1px solid #333844;
+  }
+  .muted { color: #9aa1b1; }
+  .sw { display: inline-flex; gap: 6px; align-items: center; }
+  .sw i {
+    inline-size: 18px; block-size: 18px; border-radius: 4px;
+    border: 1px solid rgba(255,255,255,0.3); display: block;
+  }
+  .rows { padding: 10px 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+  .row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+  .rowlab { inline-size: 62px; font-size: 11px; color: #9aa1b1; }
+  .owner { display: flex; gap: 4px; align-items: flex-end;
+           padding: 6px; border-radius: 8px; background: #11131a; }
+  .grp { display: flex; gap: 2px; align-items: flex-end; }
+  .grp + .grp { margin-inline-start: 10px; }
+  .sq { display: grid; place-items: center; border-radius: 3px; }
+
+  /* the piece box, copied from style.css so the harness shows what the board shows */
+  .piece { position: relative; display: block;
+           filter: drop-shadow(0 2px 3px rgba(0,0,0,0.45)); }
+  .glyph { display: block; inline-size: 100%; block-size: 100%; overflow: visible; }
+  .piece > .glyph { position: absolute; inset: 0; }
+  .piece-sub { position: absolute; top: -7%; right: -7%;
+               inline-size: 44%; block-size: 44%; }
+  .kinds { font-size: 11px; color: #9aa1b1; margin-inline-start: 4px; }
+</style>
+</head>
+<body>
+<h1>War Game &mdash; theme glyphs</h1>
+<div class="bar">
+  <label><input type="checkbox" id="flip"> flip (owner 1 facing)</label>
+  <label><input type="checkbox" id="own"> use each theme's own player colors</label>
+  <label><input type="checkbox" id="pal"> add each theme's own squares</label>
+  <label><input type="checkbox" id="box"> show the 100&times;100 box</label>
+  <span class="muted">sizes 40 / 64 / 90 px &middot; kinds S K A and the hybrid S+K</span>
+</div>
+<div id="out"></div>
+
+<script src="../src/themes.js"></script>
+<script>
+(function () {
+  'use strict';
+  var T = window.WarGame.Themes;
+  var SIZES = [40, 64, 90];
+  var SQUARES = [
+    ['light', '#efe0c3'], ['dark', '#a97e57'],
+    ['night', '#2a2f3a'], ['colorful', '#7fb3a3']
+  ];
+  var OWNERS = [
+    ['#efe6cf', '#22252e'],
+    ['#2f3550', '#e7e3d6']
+  ];
+
+  function lum(hex) {
+    var h = hex.replace('#', '');
+    if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+    var n = parseInt(h, 16);
+    var r = (n >> 16 & 255) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+    function f(c) { return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+    return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b);
+  }
+  function outlineFor(hex) { return lum(hex) > 0.36 ? '#22252e' : '#e7e3d6'; }
+
+  function piece(theme, kinds, size, owner, flip, box) {
+    var el = document.createElement('span');
+    el.className = 'piece';
+    el.style.inlineSize = size + 'px';
+    el.style.blockSize = size + 'px';
+    el.style.color = owner[0];
+    el.style.setProperty('--piece-outline', owner[1]);
+    if (box) el.style.outline = '1px solid rgba(255,0,0,0.35)';
+    var html = theme.glyph(kinds[0], { flip: flip, cls: 'glyph--main' });
+    if (kinds.length > 1) {
+      html += '<span class="piece-sub">' +
+        theme.glyph(kinds[1], { flip: flip, cls: 'glyph--sub' }) + '</span>';
+    }
+    el.innerHTML = html;
+    return el;
+  }
+
+  function cell(theme, kinds, size, owner, bg, flip, box) {
+    var sq = document.createElement('div');
+    sq.className = 'sq';
+    sq.style.background = bg;
+    var pad = Math.round(size * 1.16);
+    sq.style.inlineSize = pad + 'px';
+    sq.style.blockSize = pad + 'px';
+    sq.appendChild(piece(theme, kinds, size, owner, flip, box));
+    return sq;
+  }
+
+  function render() {
+    var flip = document.getElementById('flip').checked;
+    var own = document.getElementById('own').checked;
+    var pal = document.getElementById('pal').checked;
+    var box = document.getElementById('box').checked;
+    var out = document.getElementById('out');
+    out.textContent = '';
+
+    T.list.forEach(function (id) {
+      var th = T.get(id);
+      var sec = document.createElement('section');
+      sec.className = 'theme';
+
+      var head = document.createElement('header');
+      var h = document.createElement('h2');
+      h.textContent = th.id;
+      head.appendChild(h);
+      var nm = document.createElement('span');
+      nm.className = 'muted';
+      nm.textContent = th.name.en + ' / ' + th.name.he + '  ·  ' + th.boardClass;
+      head.appendChild(nm);
+      ['p0', 'p1', 'light', 'dark'].forEach(function (k) {
+        var s = document.createElement('span');
+        s.className = 'sw';
+        s.innerHTML = '<i style="background:' + th.palette[k] + '"></i>' +
+          '<span class="muted">' + k + ' ' + th.palette[k] + '</span>';
+        head.appendChild(s);
+      });
+      sec.appendChild(head);
+
+      var owners = own
+        ? [[th.palette.p0, outlineFor(th.palette.p0)],
+           [th.palette.p1, outlineFor(th.palette.p1)]]
+        : OWNERS;
+      var squares = SQUARES.slice();
+      if (pal) {
+        squares.push(['own light', th.palette.light]);
+        squares.push(['own dark', th.palette.dark]);
+      }
+
+      var rows = document.createElement('div');
+      rows.className = 'rows';
+      squares.forEach(function (sq) {
+        var row = document.createElement('div');
+        row.className = 'row';
+        var lab = document.createElement('div');
+        lab.className = 'rowlab';
+        lab.textContent = sq[0];
+        row.appendChild(lab);
+        owners.forEach(function (ow) {
+          var ob = document.createElement('div');
+          ob.className = 'owner';
+          [['S'], ['K'], ['A'], ['S', 'K']].forEach(function (kinds) {
+            var g = document.createElement('div');
+            g.className = 'grp';
+            SIZES.forEach(function (size) {
+              g.appendChild(cell(th, kinds, size, ow, sq[1], flip, box));
+            });
+            ob.appendChild(g);
+          });
+          row.appendChild(ob);
+        });
+        rows.appendChild(row);
+      });
+      sec.appendChild(rows);
+      out.appendChild(sec);
+    });
+  }
+
+  ['flip', 'own', 'pal', 'box'].forEach(function (id) {
+    document.getElementById(id).addEventListener('change', render);
+  });
+  render();
+})();
+</script>
+</body>
+</html>

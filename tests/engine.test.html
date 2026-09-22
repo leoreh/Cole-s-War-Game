@@ -64,11 +64,12 @@
 
   /* ---------- building positions ---------- */
 
-  // specs: { id?, owner, kind|kinds, row, col, str?, maxStr? }
+  // specs: { id?, owner, kind|kinds, row, col, hp?, maxHp? }
+  // opts:  { player, number, used, pendingMerge, winner, rules }
   function position(specs, opts) {
     opts = opts || {};
     var st = {
-      rules: { diagonalFire: true, knightsJump: false },
+      rules: { diagonalMoves: true },
       pieces: {},
       turn: {
         player: opts.player === undefined ? 0 : opts.player,
@@ -82,17 +83,24 @@
     if (opts.rules) Object.keys(opts.rules).forEach(function (k) { st.rules[k] = opts.rules[k]; });
     specs.forEach(function (sp, i) {
       var kinds = sp.kinds || [sp.kind];
-      var base = 0;
-      kinds.forEach(function (k) { base += E.KINDS[k].str; });
+      var baseHp = 0;
+      kinds.forEach(function (k) { baseHp += E.KINDS[k].hp; });
       var id = sp.id || ('p' + sp.owner + '-' + i);
       st.pieces[id] = {
         id: id, owner: sp.owner, kinds: kinds.slice(),
-        str: sp.str === undefined ? base : sp.str,
-        maxStr: sp.maxStr === undefined ? base : sp.maxStr,
+        hp: sp.hp === undefined ? baseHp : sp.hp,
+        maxHp: sp.maxHp === undefined ? baseHp : sp.maxHp,
         row: sp.row, col: sp.col
       };
     });
     return st;
+  }
+
+  // combo slots already spent this turn, as turn.used entries
+  function slots() {
+    return Array.prototype.slice.call(arguments).map(function (k, i) {
+      return { id: 'spent' + i, kind: k, fireLeft: false };
+    });
   }
 
   function ofType(actions, type) {
@@ -107,28 +115,40 @@
     return actions.some(function (a) { return a.type === type && a.target === id; });
   }
 
+  function targets(actions, type) {
+    return ofType(actions, type).map(function (a) { return a.target; }).sort();
+  }
+
   function eventTypes(events) {
     return events.map(function (e) { return e.type; });
   }
 
-  function sorted(nums) {
-    return nums.slice().sort(function (a, b) { return a - b; });
+  function sorted(list) {
+    return list.slice().sort(function (a, b) { return a < b ? -1 : (a > b ? 1 : 0); });
+  }
+
+  function kindSet(state) {
+    return Array.from(E.activatableKinds(state)).sort();
+  }
+
+  function move(state, id, row, col) {
+    return E.apply(state, { type: 'move', piece: id, to: { row: row, col: col } }).state;
   }
 
   /* ---------- setup ---------- */
 
-  test('setup: 32 pieces, rules and turn defaults', function () {
+  test('setup: 32 pieces, default rules and a fresh turn', function () {
     var s = E.newGame({}, 0);
     assertEqual(Object.keys(s.pieces).length, 32, 'piece count');
-    assertEqual(s.rules, { diagonalFire: true, knightsJump: false }, 'default rules');
+    assertEqual(s.rules, { diagonalMoves: true }, 'default rules');
+    assertEqual(E.DEFAULT_RULES, { diagonalMoves: true }, 'the exported defaults');
     assertEqual(s.turn.player, 0);
     assertEqual(s.firstPlayer, 0);
     assertEqual(s.turn.number, 1);
     assertEqual(s.turn.used, []);
     assertEqual(s.pendingMerge, null);
     assertEqual(s.winner, null);
-    assertEqual(E.newGame({ diagonalFire: false, knightsJump: true }, 1).rules,
-      { diagonalFire: false, knightsJump: true }, 'rules merged over defaults');
+    assertEqual(E.newGame({ diagonalMoves: false }, 1).rules, { diagonalMoves: false }, 'rules merged over defaults');
     assertEqual(E.newGame({}, 1).turn.player, 1, 'firstPlayer honoured');
   });
 
@@ -154,20 +174,28 @@
       assertEqual(ar.length, 4, 'archers');
       assert(ar.every(function (p) { return p.row === third; }), 'archers on the third row');
       assertEqual(sorted(ar.map(function (p) { return p.col; })), [2, 3, 4, 5]);
+      assert(ar.every(function (p) { return p.hp === 3 && p.maxHp === 3; }), 'archers have hp 3');
 
-      assert(ps.every(function (p) { return p.str === p.maxStr; }), 'pieces start at full strength');
+      assert(ps.every(function (p) { return p.hp === p.maxHp; }), 'pieces start at full health');
       assert(ps.every(function (p) { return p.id.indexOf('p' + pl + '-') === 0; }), 'id form');
     });
   });
 
-  test('pieceStats and comboKind', function () {
+  test('pieceStats: health, strength, move, fire and range of each kind', function () {
     var s = E.newGame({}, 0);
-    assertEqual(E.pieceStats(s.pieces['p0-0']), { str: 1, maxStr: 1, move: 2, fire: 0, range: 0, comboKind: 'S' });
-    assertEqual(E.pieceStats(s.pieces['p0-8']), { str: 3, maxStr: 3, move: 4, fire: 0, range: 0, comboKind: 'K' });
-    assertEqual(E.pieceStats(s.pieces['p0-12']), { str: 0, maxStr: 0, move: 2, fire: 2, range: 1, comboKind: 'A' });
-    assertEqual(E.comboKind({ kinds: ['K', 'A'] }), 'K', 'K wins in a hybrid');
+    assertEqual(E.pieceStats(s.pieces['p0-0']),
+      { str: 1, baseStr: 1, hp: 1, maxHp: 1, move: 2, fire: 0, range: 0, comboKind: 'S' }, 'soldier');
+    assertEqual(E.pieceStats(s.pieces['p0-8']),
+      { str: 3, baseStr: 3, hp: 3, maxHp: 3, move: 4, fire: 0, range: 0, comboKind: 'K' }, 'knight');
+    assertEqual(E.pieceStats(s.pieces['p0-12']),
+      { str: 0, baseStr: 0, hp: 3, maxHp: 3, move: 2, fire: 2, range: 2, comboKind: 'A' }, 'archer');
+  });
+
+  test('comboKind: K beats A beats S', function () {
+    assertEqual(E.comboKind({ kinds: ['K', 'A'] }), 'K');
     assertEqual(E.comboKind({ kinds: ['A', 'S'] }), 'A');
     assertEqual(E.comboKind({ kinds: ['S', 'S'] }), 'S');
+    assertEqual(E.comboKind({ kinds: ['S'] }), 'S');
   });
 
   test('pieceAt and piecesOf', function () {
@@ -179,11 +207,11 @@
 
   /* ---------- melee ---------- */
 
-  // attacker at (3,3) of player 0, defender at (3,4) of player 1, plus a spare each so the game goes on
+  // attacker at (3,3) of player 0, defender at (3,4) of player 1, plus a spare each
   function melee(att, def) {
     var st = position([
-      { id: 'a', owner: 0, kind: att.kind, str: att.str, row: 3, col: 3 },
-      { id: 'd', owner: 1, kind: def.kind, str: def.str, row: 3, col: 4 },
+      { id: 'a', owner: 0, kind: att.kind, hp: att.hp, row: 3, col: 3 },
+      { id: 'd', owner: 1, kind: def.kind, hp: def.hp, row: 3, col: 4 },
       { id: 'sp0', owner: 0, kind: 'S', row: 0, col: 0 },
       { id: 'sp1', owner: 1, kind: 'S', row: 7, col: 7 }
     ]);
@@ -198,292 +226,463 @@
     assertEqual(atk.type, 'attack');
     assertEqual(atk.attackerLoss, 1);
     assertEqual(atk.defenderLoss, 1);
+    assertEqual(atk.attackerMoved, false);
     assertEqual(ofType(r.events, 'die').length, 2);
   });
 
-  test('melee: knight attacks soldier, soldier dies, knight ends at 2 on the square', function () {
+  test('melee: knight attacks soldier, the soldier dies and the knight ends at 2 on the square', function () {
     var r = melee({ kind: 'K' }, { kind: 'S' });
     assertEqual(r.state.pieces['d'], undefined, 'soldier dead');
-    assertEqual(r.state.pieces['a'].str, 2, 'knight strength');
-    assertEqual(r.state.pieces['a'].row, 3);
-    assertEqual(r.state.pieces['a'].col, 4, 'knight took the square');
+    assertEqual(r.state.pieces['a'].hp, 2, 'knight health');
+    assertEqual(E.pieceStats(r.state.pieces['a']).str, 2, 'and strength 2');
+    assertEqual([r.state.pieces['a'].row, r.state.pieces['a'].col], [3, 4], 'knight took the square');
+    assertEqual(r.events[0].attackerMoved, true);
   });
 
-  test('melee: soldier attacks knight, soldier dies, knight ends at 2 and stays', function () {
+  test('melee: soldier attacks knight, the soldier dies and the knight stays at 2', function () {
     var r = melee({ kind: 'S' }, { kind: 'K' });
     assertEqual(r.state.pieces['a'], undefined, 'soldier dead');
-    assertEqual(r.state.pieces['d'].str, 2, 'knight strength');
+    assertEqual(r.state.pieces['d'].hp, 2, 'knight health');
     assertEqual(r.state.pieces['d'].col, 4, 'knight stayed');
   });
 
   test('melee: soldier attacks a knight at 1, both die', function () {
-    var r = melee({ kind: 'S' }, { kind: 'K', str: 1 });
-    assertEqual(r.state.pieces['a'], undefined);
+    var r = melee({ kind: 'S' }, { kind: 'K', hp: 1 });
+    assertEqual(r.state.pieces['a'], undefined, 'the knight at 1 hits for 1');
     assertEqual(r.state.pieces['d'], undefined);
   });
 
-  test('melee: knight at 2 attacks knight at 3, attacker dies, defender ends at 1', function () {
-    var r = melee({ kind: 'K', str: 2 }, { kind: 'K' });
+  test('melee: a knight at 2 attacks a knight at 3, the attacker dies and the defender ends at 1', function () {
+    var r = melee({ kind: 'K', hp: 2 }, { kind: 'K' });
     assertEqual(r.state.pieces['a'], undefined, 'attacker dead');
-    assertEqual(r.state.pieces['d'].str, 1);
+    assertEqual(r.state.pieces['d'].hp, 1);
     assertEqual(r.state.pieces['d'].col, 4, 'defender stayed');
   });
 
-  test('melee: attacking an archer kills it and costs nothing', function () {
-    var r = melee({ kind: 'K' }, { kind: 'A' });
-    assertEqual(r.state.pieces['d'], undefined, 'archer dead');
-    assertEqual(r.state.pieces['a'].str, 3, 'attacker unhurt');
-    assertEqual(r.state.pieces['a'].col, 4, 'attacker took the square');
+  test('melee: a soldier attacks an archer, the archer drops to 2 and the soldier stays unharmed', function () {
+    var r = melee({ kind: 'S' }, { kind: 'A' });
+    assertEqual(r.state.pieces['d'].hp, 2, 'archer at 2');
+    assertEqual(r.state.pieces['a'].hp, 1, 'the archer hits for 0');
+    assertEqual([r.state.pieces['a'].row, r.state.pieces['a'].col], [3, 3], 'the soldier stayed in place');
+    assertEqual(r.events[0].attackerMoved, false);
+    assertEqual(eventTypes(r.events), ['attack'], 'nobody died');
+  });
+
+  test('strength follows health: a hybrid K+A hits for 3 at full health and for 2 at health 2', function () {
+    var full = position([{ id: 'h', owner: 0, kinds: ['K', 'A'], row: 3, col: 3 }]);
+    assertEqual(E.pieceStats(full.pieces['h']).baseStr, 3, 'K+A base strength');
+    assertEqual(E.pieceStats(full.pieces['h']).maxHp, 6, 'K+A health 6');
+    assertEqual(E.pieceStats(full.pieces['h']).str, 3, 'at 6 it hits for 3');
+
+    var hurt = position([{ id: 'h', owner: 0, kinds: ['K', 'A'], hp: 2, row: 3, col: 3 }]);
+    assertEqual(E.pieceStats(hurt.pieces['h']).str, 2, 'at 2 it hits for 2');
+  });
+
+  test('strength follows health: a knight at 2 takes 2 off its target', function () {
+    var st = position([
+      { id: 'k', owner: 0, kind: 'K', hp: 2, row: 3, col: 3 },
+      { id: 'd', owner: 1, kind: 'A', row: 3, col: 4 },
+      { id: 'sp1', owner: 1, kind: 'S', row: 7, col: 7 }
+    ]);
+    var r = E.apply(st, { type: 'attack', piece: 'k', target: 'd' });
+    assertEqual(r.events[0].defenderLoss, 2, 'it hits for 2, not 3');
+    assertEqual(r.state.pieces['d'].hp, 1, 'the archer drops from 3 to 1');
   });
 
   /* ---------- movement ---------- */
 
-  test('move range: a soldier reaches 1 or 2 squares in a line', function () {
+  test('movement: a soldier reaches every square at path cost 2 or less, corners included', function () {
     var st = position([
       { id: 'a', owner: 0, kind: 'S', row: 3, col: 3 },
       { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
     ]);
-    var acts = E.legalActions(st, 'a');
-    var mv = ofType(acts, 'move');
-    assertEqual(mv.length, 8, 'eight squares');
-    [[1, 3], [2, 3], [4, 3], [5, 3], [3, 1], [3, 2], [3, 4], [3, 5]].forEach(function (sq) {
-      assert(hasMove(acts, sq[0], sq[1]), 'move to ' + sq);
+    var reach = E.reachable(st, 'a');
+    var expected = {
+      '2,3': 1, '4,3': 1, '3,2': 1, '3,4': 1,
+      '1,3': 2, '5,3': 2, '3,1': 2, '3,5': 2,
+      '2,2': 2, '2,4': 2, '4,2': 2, '4,4': 2
+    };
+    assertEqual(sorted(Object.keys(reach)), sorted(Object.keys(expected)), 'the reachable squares');
+    Object.keys(expected).forEach(function (k) {
+      assertEqual(reach[k].cost, expected[k], 'cost to ' + k);
     });
-    assert(!hasMove(acts, 3, 6), 'never three squares');
+    var acts = E.legalActions(st, 'a');
+    assertEqual(ofType(acts, 'move').length, 12, 'every reachable square is a move');
+    assert(!hasMove(acts, 3, 6), 'never three squares away');
   });
 
-  test('move range: a knight reaches up to 4 squares', function () {
+  test('movement: a knight reaches every square at path cost 4 or less', function () {
+    var st = position([{ id: 'a', owner: 0, kind: 'K', row: 3, col: 3 }]);
+    var reach = E.reachable(st, 'a');
+    var n = 0;
+    for (var row = 0; row < 8; row++) {
+      for (var col = 0; col < 8; col++) {
+        // a diagonal step costs exactly the two orthogonal steps it replaces,
+        // so on an open board the cheapest cost is the manhattan distance
+        var dist = Math.abs(row - 3) + Math.abs(col - 3);
+        var k = row + ',' + col;
+        if (dist === 0 || dist > 4) { assertEqual(reach[k], undefined, 'not reachable: ' + k); continue; }
+        assert(reach[k], 'reachable: ' + k);
+        assertEqual(reach[k].cost, dist, 'cost to ' + k);
+        n += 1;
+      }
+    }
+    assertEqual(Object.keys(reach).length, n, 'nothing else is reachable');
+    assertEqual(n, 38, 'the squares within four points');
+  });
+
+  test('movement: with diagonal moves a diagonal neighbour is one step, without it two', function () {
+    var specs = [{ id: 'a', owner: 0, kind: 'S', row: 3, col: 3 }];
+    var on = E.reachable(position(specs), 'a')['4,4'];
+    assertEqual([on.cost, on.steps], [2, 1], 'one diagonal step');
+    assertEqual(on.path, [{ row: 4, col: 4 }]);
+
+    var off = E.reachable(position(specs, { rules: { diagonalMoves: false } }), 'a')['4,4'];
+    assertEqual([off.cost, off.steps], [2, 2], 'around the corner');
+    assertEqual(off.path.length, 2);
+    assertEqual(off.path[1], { row: 4, col: 4 });
+    assert(deepEqual(off.path[0], { row: 4, col: 3 }) || deepEqual(off.path[0], { row: 3, col: 4 }), 'via a neighbour');
+  });
+
+  test('movement: with diagonal moves a knight reaches the two-step diagonal', function () {
+    var specs = [{ id: 'a', owner: 0, kind: 'K', row: 3, col: 3 }];
+    var on = E.reachable(position(specs), 'a')['5,5'];
+    assertEqual([on.cost, on.steps], [4, 2], 'two diagonal steps');
+    assertEqual(on.path, [{ row: 4, col: 4 }, { row: 5, col: 5 }]);
+
+    var off = E.reachable(position(specs, { rules: { diagonalMoves: false } }), 'a')['5,5'];
+    assertEqual([off.cost, off.steps], [4, 4], 'four orthogonal steps');
+  });
+
+  test('movement: an own piece is passed over but is never a destination', function () {
     var st = position([
-      { id: 'a', owner: 0, kind: 'K', row: 3, col: 3 },
+      { id: 'k', owner: 0, kind: 'K', row: 3, col: 0 },
+      { id: 'f', owner: 0, kind: 'S', row: 3, col: 1 },
       { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
     ]);
-    var acts = E.legalActions(st, 'a');
-    assertEqual(ofType(acts, 'move').length, 14, 'three up, four down, three left, four right');
-    assert(hasMove(acts, 7, 3), 'four down');
-    assert(hasMove(acts, 0, 3), 'three up, board edge');
-    assert(hasMove(acts, 3, 7), 'four right');
+    var reach = E.reachable(st, 'k');
+    assertEqual(reach['3,1'], undefined, 'no path ends on an own piece');
+    assertEqual(reach['3,2'].cost, 2, 'straight through the friend');
+    assertEqual(reach['3,2'].path, [{ row: 3, col: 1 }, { row: 3, col: 2 }], 'the path crosses it');
+    var acts = E.legalActions(st, 'k');
+    assert(!hasMove(acts, 3, 1), 'no move onto an own piece');
+    assert(!hasTarget(acts, 'attack', 'f'), 'no attack on an own piece');
+    assert(hasMove(acts, 3, 2), 'the square behind it is reachable');
   });
 
-  test('no diagonal moves', function () {
+  test('movement: an enemy ends a path and is never passed over', function () {
     var st = position([
-      { id: 'a', owner: 0, kind: 'K', row: 3, col: 3 },
-      { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
-    ]);
-    var acts = E.legalActions(st, 'a');
-    assert(!hasMove(acts, 4, 4), 'no (4,4)');
-    assert(!hasMove(acts, 2, 2), 'no (2,2)');
-    assert(ofType(acts, 'move').every(function (a) {
-      return a.to.row === 3 || a.to.col === 3;
-    }), 'every move stays on the row or the column');
-  });
-
-  test('a piece in the path blocks, and a friendly square is not a destination', function () {
-    var st = position([
-      { id: 'a', owner: 0, kind: 'K', row: 3, col: 0 },
-      { id: 'f', owner: 0, kind: 'S', row: 3, col: 2 },
-      { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
-    ]);
-    var acts = E.legalActions(st, 'a');
-    assert(hasMove(acts, 3, 1), 'one square right');
-    assert(!hasMove(acts, 3, 2), 'no move onto a friendly piece');
-    assert(!hasTarget(acts, 'attack', 'f'), 'no attack on a friendly piece');
-    assert(!hasMove(acts, 3, 3), 'no jumping over the blocker');
-    assert(!hasMove(acts, 3, 4), 'no jumping over the blocker');
-    assertThrows(function () { E.apply(st, { type: 'move', piece: 'a', to: { row: 3, col: 3 } }); }, 'blocked move throws');
-  });
-
-  test('an enemy in the path blocks but may be attacked', function () {
-    var st = position([
-      { id: 'a', owner: 0, kind: 'K', row: 3, col: 0 },
-      { id: 'e', owner: 1, kind: 'S', row: 3, col: 2 },
+      { id: 'k', owner: 0, kind: 'K', row: 3, col: 0 },
+      { id: 'e', owner: 1, kind: 'S', row: 3, col: 1 },
       { id: 'e2', owner: 1, kind: 'S', row: 7, col: 7 }
     ]);
-    var acts = E.legalActions(st, 'a');
-    assert(hasMove(acts, 3, 1), 'one square right');
-    assert(hasTarget(acts, 'attack', 'e'), 'the enemy is attackable');
-    assert(!hasMove(acts, 3, 3), 'no passing through the enemy');
+    var reach = E.reachable(st, 'k');
+    assertEqual(reach['3,1'].cost, 1, 'the enemy square is a path end');
+    assertEqual(reach['3,2'].cost, 4, 'the square behind it costs a detour');
+    Object.keys(reach).forEach(function (k) {
+      reach[k].path.slice(0, -1).forEach(function (sq) {
+        assert(!(sq.row === 3 && sq.col === 1), 'no path crosses the enemy: ' + k);
+      });
+    });
+    assert(hasTarget(E.legalActions(st, 'k'), 'attack', 'e'), 'but it may be attacked');
   });
 
-  test('knightsJump: only a K passes over an occupied square, and only with the toggle', function () {
-    var pieces = [
-      { id: 'k', owner: 0, kind: 'K', row: 3, col: 0 },
-      { id: 'f', owner: 0, kind: 'S', row: 3, col: 2 },
-      { id: 's', owner: 0, kind: 'S', row: 5, col: 0 },
-      { id: 'f2', owner: 0, kind: 'S', row: 5, col: 2 },
-      { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
-    ];
-    var off = position(pieces);
-    var on = position(pieces, { rules: { knightsJump: true } });
-
-    assert(!hasMove(E.legalActions(off, 'k'), 3, 3), 'toggle off: the knight does not jump');
-    assert(hasMove(E.legalActions(on, 'k'), 3, 3), 'toggle on: the knight jumps');
-    assert(hasMove(E.legalActions(on, 'k'), 3, 4), 'toggle on: and reaches its full range');
-    assert(!hasMove(E.legalActions(on, 'k'), 3, 2), 'a friendly square is still no destination');
-    assert(!hasMove(E.legalActions(on, 's'), 5, 3), 'a soldier never jumps');
+  test('movement: an enemy out of reach blocks the square behind it for a soldier', function () {
+    var st = position([
+      { id: 's', owner: 0, kind: 'S', row: 3, col: 3 },
+      { id: 'e', owner: 1, kind: 'S', row: 3, col: 4 }
+    ]);
+    var reach = E.reachable(st, 's');
+    assertEqual(reach['3,4'].cost, 1, 'the enemy itself is reachable');
+    assertEqual(reach['3,5'], undefined, 'and nothing may pass it inside the budget');
+    assertThrows(function () { E.apply(st, { type: 'move', piece: 's', to: { row: 3, col: 5 } }); });
   });
 
-  test('a move is applied and locks the piece', function () {
+  test('movement: every reported path is adjacent in order and matches its cost', function () {
+    var st = position([
+      { id: 'k', owner: 0, kind: 'K', row: 3, col: 3 },
+      { id: 'f', owner: 0, kind: 'S', row: 3, col: 4 },
+      { id: 'e', owner: 1, kind: 'S', row: 2, col: 3 }
+    ]);
+    var reach = E.reachable(st, 'k');
+    assert(Object.keys(reach).length > 0, 'something is reachable');
+    Object.keys(reach).forEach(function (k) {
+      var n = reach[k];
+      assertEqual(n.steps, n.path.length, 'steps count the path: ' + k);
+      var prev = { row: 3, col: 3 }, cost = 0;
+      n.path.forEach(function (sq) {
+        var dr = Math.abs(sq.row - prev.row), dc = Math.abs(sq.col - prev.col);
+        assert(dr <= 1 && dc <= 1 && dr + dc > 0, 'adjacent step in ' + k);
+        cost += (dr === 1 && dc === 1) ? 2 : 1;
+        prev = sq;
+      });
+      assertEqual(cost, n.cost, 'the cost is the sum of the steps: ' + k);
+      assertEqual(prev.row + ',' + prev.col, k, 'the path ends on the square');
+    });
+  });
+
+  test('movement: a move is applied with its path and locks the piece', function () {
     var st = position([
       { id: 'a', owner: 0, kind: 'S', row: 3, col: 3 },
       { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
     ]);
     var r = E.apply(st, { type: 'move', piece: 'a', to: { row: 5, col: 3 } });
-    assertEqual(r.events, [{ type: 'move', id: 'a', from: { row: 3, col: 3 }, to: { row: 5, col: 3 } }]);
+    assertEqual(r.events, [{
+      type: 'move', id: 'a', from: { row: 3, col: 3 }, to: { row: 5, col: 3 },
+      path: [{ row: 4, col: 3 }, { row: 5, col: 3 }], cost: 2, fireLeft: false
+    }]);
     assertEqual(r.state.pieces['a'].row, 5);
-    assertEqual(r.state.turn.used, [{ id: 'a', kind: 'S' }]);
+    assertEqual(r.state.turn.used, [{ id: 'a', kind: 'S', fireLeft: false }]);
     assertEqual(E.legalActions(r.state, 'a'), [], 'a used piece has no actions');
     assertEqual(E.canActivate(r.state, 'a'), false);
   });
 
-  /* ---------- archer melee ---------- */
+  /* ---------- fire ---------- */
 
-  test('an archer has no attack actions', function () {
+  test('fire: an archer has no attack actions', function () {
     var st = position([
       { id: 'a', owner: 0, kind: 'A', row: 3, col: 3 },
       { id: 'e', owner: 1, kind: 'S', row: 3, col: 4 }
     ]);
     var acts = E.legalActions(st, 'a');
-    assertEqual(ofType(acts, 'attack').length, 0, 'no attack');
+    assertEqual(ofType(acts, 'attack').length, 0, 'strength 0 never attacks');
     assert(hasTarget(acts, 'fire', 'e'), 'but it may fire');
     assertThrows(function () { E.apply(st, { type: 'attack', piece: 'a', target: 'e' }); });
   });
 
-  /* ---------- fire ---------- */
-
-  test('fire: range 1, diagonal allowed by default', function () {
+  test('fire: range 2 in the row or the column, never diagonal', function () {
     var st = position([
       { id: 'a', owner: 0, kind: 'A', row: 3, col: 3 },
-      { id: 'near', owner: 1, kind: 'K', row: 4, col: 4 },
-      { id: 'line', owner: 1, kind: 'K', row: 3, col: 4 },
-      { id: 'far', owner: 1, kind: 'K', row: 3, col: 5 }
+      { id: 'row2', owner: 1, kind: 'K', row: 3, col: 5 },
+      { id: 'row3', owner: 1, kind: 'K', row: 3, col: 6 },
+      { id: 'col2', owner: 1, kind: 'K', row: 1, col: 3 },
+      { id: 'diag', owner: 1, kind: 'K', row: 4, col: 4 }
+    ]);
+    assertEqual(targets(E.legalActions(st, 'a'), 'fire'), ['col2', 'row2'], 'only the two at distance 2 in a line');
+    assertThrows(function () { E.apply(st, { type: 'fire', piece: 'a', target: 'row3' }); }, 'distance 3 is out');
+    assertThrows(function () { E.apply(st, { type: 'fire', piece: 'a', target: 'diag' }); }, 'fire is never diagonal');
+  });
+
+  test('fire: nothing in between blocks', function () {
+    var st = position([
+      { id: 'a', owner: 0, kind: 'A', row: 3, col: 3 },
+      { id: 'near', owner: 1, kind: 'S', row: 3, col: 4 },
+      { id: 'behind', owner: 1, kind: 'K', row: 3, col: 5 },
+      { id: 'friend', owner: 0, kind: 'S', row: 4, col: 3 },
+      { id: 'past', owner: 1, kind: 'K', row: 5, col: 3 }
     ]);
     var acts = E.legalActions(st, 'a');
-    assert(hasTarget(acts, 'fire', 'near'), 'diagonal neighbour');
-    assert(hasTarget(acts, 'fire', 'line'), 'orthogonal neighbour');
-    assert(!hasTarget(acts, 'fire', 'far'), 'distance 2 is out of range');
-    assertThrows(function () { E.apply(st, { type: 'fire', piece: 'a', target: 'far' }); });
+    assert(hasTarget(acts, 'fire', 'behind'), 'over an enemy');
+    assert(hasTarget(acts, 'fire', 'past'), 'over an own piece');
+    assertEqual(E.apply(st, { type: 'fire', piece: 'a', target: 'behind' }).state.pieces['behind'].hp, 1);
   });
 
-  test('fire: diagonalFire off rules out a diagonal target', function () {
+  test('fire: a knight at 3 drops to 1 and the shooter neither loses nor moves', function () {
     var st = position([
       { id: 'a', owner: 0, kind: 'A', row: 3, col: 3 },
-      { id: 'near', owner: 1, kind: 'K', row: 4, col: 4 },
-      { id: 'line', owner: 1, kind: 'K', row: 3, col: 4 }
-    ], { rules: { diagonalFire: false } });
-    var acts = E.legalActions(st, 'a');
-    assert(!hasTarget(acts, 'fire', 'near'), 'no diagonal target');
-    assert(hasTarget(acts, 'fire', 'line'), 'the same row is still fine');
-    assertThrows(function () { E.apply(st, { type: 'fire', piece: 'a', target: 'near' }); });
+      { id: 'd', owner: 1, kind: 'K', row: 3, col: 4 },
+      { id: 'sp1', owner: 1, kind: 'S', row: 7, col: 7 }
+    ]);
+    var r = E.apply(st, { type: 'fire', piece: 'a', target: 'd' });
+    assertEqual(r.events, [{ type: 'fire', shooter: 'a', target: 'd', damage: 2 }]);
+    assertEqual(r.state.pieces['d'].hp, 1);
+    assertEqual(r.state.pieces['a'].hp, 3, 'the shooter loses nothing');
+    assertEqual([r.state.pieces['a'].row, r.state.pieces['a'].col], [3, 3], 'and does not move');
+    assertEqual(r.state.turn.used, [{ id: 'a', kind: 'A', fireLeft: false }]);
   });
 
-  test('fire: a knight at 3 drops to 1, a soldier dies, a knight at 2 dies', function () {
-    function shoot(def) {
-      var st = position([
-        { id: 'a', owner: 0, kind: 'A', row: 3, col: 3 },
-        { id: 'd', owner: 1, kind: def.kind, str: def.str, row: 3, col: 4 },
-        { id: 'sp1', owner: 1, kind: 'S', row: 7, col: 7 }
-      ]);
-      return E.apply(st, { type: 'fire', piece: 'a', target: 'd' });
-    }
-    var r1 = shoot({ kind: 'K' });
-    assertEqual(r1.state.pieces['d'].str, 1, 'knight at 3 drops to 1');
-    assertEqual(r1.events[0], { type: 'fire', shooter: 'a', target: 'd', damage: 2 });
-    assertEqual(r1.state.pieces['a'].str, 0, 'the shooter loses nothing');
-    assertEqual(r1.state.pieces['a'].col, 3, 'the shooter does not move');
-    assertEqual(r1.state.turn.used, [{ id: 'a', kind: 'A' }]);
+  test('fire: a soldier dies of one shot', function () {
+    var st = position([
+      { id: 'a', owner: 0, kind: 'A', row: 3, col: 3 },
+      { id: 'd', owner: 1, kind: 'S', row: 3, col: 4 },
+      { id: 'sp1', owner: 1, kind: 'S', row: 7, col: 7 }
+    ]);
+    var r = E.apply(st, { type: 'fire', piece: 'a', target: 'd' });
+    assertEqual(r.state.pieces['d'], undefined);
+    assertEqual(eventTypes(r.events), ['fire', 'die']);
+  });
 
-    var r2 = shoot({ kind: 'S' });
-    assertEqual(r2.state.pieces['d'], undefined, 'the soldier dies');
-    assertEqual(eventTypes(r2.events), ['fire', 'die']);
+  test('fire: an archer at 3 drops to 1', function () {
+    var st = position([
+      { id: 'a', owner: 0, kind: 'A', row: 3, col: 3 },
+      { id: 'd', owner: 1, kind: 'A', row: 3, col: 4 },
+      { id: 'sp1', owner: 1, kind: 'S', row: 7, col: 7 }
+    ]);
+    assertEqual(E.apply(st, { type: 'fire', piece: 'a', target: 'd' }).state.pieces['d'].hp, 1);
+  });
 
-    var r3 = shoot({ kind: 'K', str: 2 });
-    assertEqual(r3.state.pieces['d'], undefined, 'a knight at 2 dies');
+  /* ---------- move then fire ---------- */
+
+  // an archer one step away from bringing the enemy knight into range
+  function archerAndTarget() {
+    return position([
+      { id: 'a', owner: 0, kind: 'A', row: 3, col: 3 },
+      { id: 'e', owner: 1, kind: 'K', row: 3, col: 6 },
+      { id: 'sp1', owner: 1, kind: 'S', row: 7, col: 7 }
+    ]);
+  }
+
+  test('move then fire: an archer that moved one step keeps its shot and nothing else', function () {
+    var r = E.apply(archerAndTarget(), { type: 'move', piece: 'a', to: { row: 3, col: 4 } });
+    assertEqual(r.events[0].fireLeft, true, 'the move event says so');
+    assertEqual(r.state.turn.used, [{ id: 'a', kind: 'A', fireLeft: true }]);
+    assertEqual(E.canFireAgain(r.state, 'a'), true);
+    assertEqual(E.canActivate(r.state, 'a'), false, 'it is still spent for everything else');
+    var acts = E.legalActions(r.state, 'a');
+    assertEqual(ofType(acts, 'move').length, 0, 'no second move');
+    assertEqual(targets(acts, 'fire'), ['e'], 'it fires from its new square');
+  });
+
+  test('move then fire: after the shot the archer is done', function () {
+    var moved = E.apply(archerAndTarget(), { type: 'move', piece: 'a', to: { row: 3, col: 4 } }).state;
+    var r = E.apply(moved, { type: 'fire', piece: 'a', target: 'e' });
+    assertEqual(r.state.pieces['e'].hp, 1);
+    assertEqual(r.state.turn.used, [{ id: 'a', kind: 'A', fireLeft: false }], 'the shot adds no slot');
+    assertEqual(E.canFireAgain(r.state, 'a'), false);
+    assertEqual(E.legalActions(r.state, 'a'), []);
+  });
+
+  test('move then fire: two steps forfeit the shot', function () {
+    var r = E.apply(archerAndTarget(), { type: 'move', piece: 'a', to: { row: 3, col: 5 } });
+    assertEqual(r.events[0].cost, 2);
+    assertEqual(r.events[0].fireLeft, false, 'two steps, no shot');
+    assertEqual(E.canFireAgain(r.state, 'a'), false);
+    assertEqual(E.legalActions(r.state, 'a'), [], 'even with the enemy one square away');
+    assertThrows(function () { E.apply(r.state, { type: 'fire', piece: 'a', target: 'e' }); });
+  });
+
+  test('move then fire: the kept shot costs no combination slot after K and A', function () {
+    var st = position([
+      { id: 'k', owner: 0, kind: 'K', row: 0, col: 0 },
+      { id: 'a', owner: 0, kind: 'A', row: 3, col: 3 },
+      { id: 'e', owner: 1, kind: 'K', row: 3, col: 6 },
+      { id: 'sp1', owner: 1, kind: 'S', row: 7, col: 7 }
+    ]);
+    var s = move(st, 'k', 0, 1);
+    s = move(s, 'a', 3, 4);
+    assertEqual(E.usedKinds(s), ['K', 'A']);
+    assertEqual(kindSet(s), [], 'K+A is full');
+    s = E.apply(s, { type: 'fire', piece: 'a', target: 'e' }).state;
+    assertEqual(s.turn.used.length, 2, 'the shot added no entry');
+    assertEqual(E.hasAnyAction(s), false, 'and nothing else may act');
+  });
+
+  test('move then fire: the shot survives a full A+S+S turn', function () {
+    var st = position([
+      { id: 'a', owner: 0, kind: 'A', row: 3, col: 3 },
+      { id: 's1', owner: 0, kind: 'S', row: 0, col: 0 },
+      { id: 's2', owner: 0, kind: 'S', row: 0, col: 2 },
+      { id: 'e', owner: 1, kind: 'K', row: 3, col: 6 },
+      { id: 'sp1', owner: 1, kind: 'S', row: 7, col: 7 }
+    ]);
+    var s = move(st, 'a', 3, 4);
+    s = move(s, 's1', 1, 0);
+    s = move(s, 's2', 1, 2);
+    assertEqual(E.usedKinds(s), ['A', 'S', 'S']);
+    assertEqual(kindSet(s), [], 'the combination is full');
+    assertEqual(E.canFireAgain(s, 'a'), true);
+    assertEqual(targets(E.legalActions(s, 'a'), 'fire'), ['e']);
+    assertEqual(E.apply(s, { type: 'fire', piece: 'a', target: 'e' }).state.pieces['e'].hp, 1);
   });
 
   /* ---------- combinations ---------- */
 
-  function kindSet(state) {
-    return Array.from(E.activatableKinds(state)).sort();
-  }
-
-  test('combos: after K only S or A, after S+S only S or A, after A+A only S', function () {
+  test('combos: a fresh turn takes any kind, after a knight only S or A', function () {
     var pieces = [
       { id: 'k', owner: 0, kind: 'K', row: 3, col: 3 },
       { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
     ];
-    assertEqual(kindSet(position(pieces, { used: [{ id: 'x', kind: 'K' }] })), ['A', 'S'], 'after K');
-    assertEqual(kindSet(position(pieces, { used: [{ id: 'x', kind: 'S' }, { id: 'y', kind: 'S' }] })), ['A', 'S'], 'after S+S');
-    assertEqual(kindSet(position(pieces, { used: [{ id: 'x', kind: 'A' }, { id: 'y', kind: 'A' }] })), ['S'], 'after A+A');
-    assertEqual(kindSet(position(pieces, {})), ['A', 'K', 'S'], 'a fresh turn');
+    assertEqual(kindSet(position(pieces)), ['A', 'K', 'S'], 'a fresh turn');
+    assertEqual(kindSet(position(pieces, { used: slots('K') })), ['A', 'S'], 'after K');
+    assertEqual(E.canActivate(position(pieces, { used: slots('K') }), 'k'), false, 'only one knight a turn');
   });
 
-  test('combos: after A+S+S nothing is activatable, and three archers never are', function () {
-    var pieces = [
-      { id: 'a1', owner: 0, kind: 'A', row: 3, col: 3 },
-      { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
-    ];
-    var full = position(pieces, { used: [{ id: 'x', kind: 'A' }, { id: 'y', kind: 'S' }, { id: 'z', kind: 'S' }] });
-    assertEqual(kindSet(full), [], 'the combination is full');
-    assertEqual(E.canActivate(full, 'a1'), false);
-    assertEqual(E.legalActions(full, 'a1'), []);
-
-    var twoArchers = position(pieces, { used: [{ id: 'x', kind: 'A' }, { id: 'y', kind: 'A' }] });
-    assertEqual(E.canActivate(twoArchers, 'a1'), false, 'a third archer is never activatable');
-  });
-
-  test('combos: with a knight used, a second knight cannot act but a soldier can', function () {
+  test('combos: after S+S a third S or an A, never a K', function () {
     var st = position([
-      { id: 'k1', owner: 0, kind: 'K', row: 3, col: 0 },
-      { id: 'k2', owner: 0, kind: 'K', row: 5, col: 0 },
-      { id: 's1', owner: 0, kind: 'S', row: 0, col: 0 },
+      { id: 'k', owner: 0, kind: 'K', row: 3, col: 3 },
+      { id: 's', owner: 0, kind: 'S', row: 5, col: 3 },
       { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
-    ]);
-    var r = E.apply(st, { type: 'move', piece: 'k1', to: { row: 3, col: 1 } });
-    assertEqual(E.usedKinds(r.state), ['K']);
-    assertEqual(E.canActivate(r.state, 'k2'), false, 'only one knight a turn');
-    assertEqual(E.legalActions(r.state, 'k2'), []);
-    assertEqual(E.canActivate(r.state, 's1'), true, 'K+S is allowed');
-    var r2 = E.apply(r.state, { type: 'move', piece: 's1', to: { row: 1, col: 0 } });
-    assertEqual(Array.from(E.activatableKinds(r2.state)), [], 'K+S is full');
+    ], { used: slots('S', 'S') });
+    assertEqual(kindSet(st), ['A', 'S']);
+    assertEqual(E.canActivate(st, 'k'), false, 'no knight after two soldiers');
+    assertEqual(E.canActivate(st, 's'), true);
+  });
+
+  test('combos: after A+A only a soldier, and a third archer never', function () {
+    var st = position([
+      { id: 'a', owner: 0, kind: 'A', row: 3, col: 3 },
+      { id: 's', owner: 0, kind: 'S', row: 5, col: 3 },
+      { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
+    ], { used: slots('A', 'A') });
+    assertEqual(kindSet(st), ['S']);
+    assertEqual(E.canActivate(st, 'a'), false, 'a third archer is never activatable');
+    assertEqual(E.legalActions(st, 'a'), []);
+    assertEqual(E.canActivate(st, 's'), true);
+  });
+
+  test('combos: after A+S+S nothing is activatable', function () {
+    var st = position([
+      { id: 'a', owner: 0, kind: 'A', row: 3, col: 3 },
+      { id: 's', owner: 0, kind: 'S', row: 5, col: 3 },
+      { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
+    ], { used: slots('A', 'S', 'S') });
+    assertEqual(kindSet(st), [], 'the combination is full');
+    assertEqual(E.hasAnyAction(st), false);
+    assertThrows(function () { E.apply(st, { type: 'move', piece: 's', to: { row: 5, col: 4 } }); });
   });
 
   test('combos: a hybrid counts by its combo kind', function () {
     var st = position([
       { id: 'h', owner: 0, kinds: ['S', 'K'], row: 3, col: 3 },
       { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
-    ], { used: [{ id: 'x', kind: 'K' }] });
+    ], { used: slots('K') });
     assertEqual(E.canActivate(st, 'h'), false, 'an S+K hybrid counts as K');
   });
 
   /* ---------- heal ---------- */
 
-  test('heal: +0.5 up to max, and a healed piece cannot act again', function () {
+  test('heal: adds 0.5 and is capped at max health', function () {
     var st = position([
-      { id: 'k', owner: 0, kind: 'K', str: 2, row: 3, col: 3 },
+      { id: 'k', owner: 0, kind: 'K', hp: 2, row: 3, col: 3 },
       { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
     ]);
     assertEqual(E.canHeal(st, 'k'), true);
-    var acts = E.legalActions(st, 'k');
-    assertEqual(ofType(acts, 'heal').length, 1, 'heal is offered');
-
+    assertEqual(ofType(E.legalActions(st, 'k'), 'heal').length, 1, 'heal is offered');
     var r = E.apply(st, { type: 'heal', piece: 'k' });
-    assertEqual(r.events, [{ type: 'heal', id: 'k', amount: 0.5, str: 2.5 }]);
-    assertEqual(r.state.pieces['k'].str, 2.5);
-    assertEqual(r.state.turn.used, [{ id: 'k', kind: null }]);
-    assertEqual(E.legalActions(r.state, 'k'), [], 'a healed piece cannot move');
-    assertThrows(function () { E.apply(r.state, { type: 'move', piece: 'k', to: { row: 3, col: 4 } }); });
+    assertEqual(r.events, [{ type: 'heal', id: 'k', amount: 0.5, hp: 2.5 }]);
+    assertEqual(r.state.pieces['k'].hp, 2.5);
 
-    var r2 = E.apply(position([
-      { id: 'k', owner: 0, kind: 'K', str: 2.5, row: 3, col: 3 },
+    var capped = E.apply(position([
+      { id: 'k', owner: 0, kind: 'K', hp: 2.5, row: 3, col: 3 },
       { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
     ]), { type: 'heal', piece: 'k' });
-    assertEqual(r2.state.pieces['k'].str, 3, 'capped at max strength');
-    assertEqual(E.canHeal(r2.state, 'k'), false, 'a full piece cannot heal');
+    assertEqual(capped.state.pieces['k'].hp, 3, 'capped at max health');
+    assertEqual(E.canHeal(capped.state, 'k'), false, 'a full piece cannot heal');
+  });
+
+  test('heal: an archer at 2 heals although its strength is 0', function () {
+    var st = position([
+      { id: 'a', owner: 0, kind: 'A', hp: 2, row: 3, col: 3 },
+      { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
+    ]);
+    assertEqual(E.canHeal(st, 'a'), true);
+    assertEqual(E.apply(st, { type: 'heal', piece: 'a' }).state.pieces['a'].hp, 2.5);
+  });
+
+  test('heal: a healed piece cannot act again this turn', function () {
+    var st = position([
+      { id: 'k', owner: 0, kind: 'K', hp: 2, row: 3, col: 3 },
+      { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
+    ]);
+    var r = E.apply(st, { type: 'heal', piece: 'k' });
+    assertEqual(r.state.turn.used, [{ id: 'k', kind: null, fireLeft: false }]);
+    assertEqual(E.legalActions(r.state, 'k'), [], 'a healed piece cannot move');
+    assertThrows(function () { E.apply(r.state, { type: 'move', piece: 'k', to: { row: 3, col: 4 } }); });
   });
 
   test('heal: a piece that has acted cannot heal', function () {
     var st = position([
-      { id: 's', owner: 0, kind: 'S', str: 0.5, row: 3, col: 3 },
+      { id: 's', owner: 0, kind: 'S', hp: 0.5, row: 3, col: 3 },
       { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
     ]);
     var r = E.apply(st, { type: 'move', piece: 's', to: { row: 3, col: 4 } });
@@ -493,7 +692,7 @@
 
   test('heal: healing consumes no combination slot', function () {
     var st = position([
-      { id: 'k', owner: 0, kind: 'K', str: 2, row: 0, col: 0 },
+      { id: 'k', owner: 0, kind: 'K', hp: 2, row: 0, col: 0 },
       { id: 's1', owner: 0, kind: 'S', row: 2, col: 0 },
       { id: 's2', owner: 0, kind: 'S', row: 4, col: 0 },
       { id: 's3', owner: 0, kind: 'S', row: 6, col: 0 },
@@ -502,31 +701,30 @@
     var s = E.apply(st, { type: 'heal', piece: 'k' }).state;
     assertEqual(E.usedKinds(s), [], 'a heal is not a combo kind');
     assertEqual(E.canActivate(s, 'k'), false, 'but the knight is spent');
-    s = E.apply(s, { type: 'move', piece: 's1', to: { row: 2, col: 1 } }).state;
-    s = E.apply(s, { type: 'move', piece: 's2', to: { row: 4, col: 1 } }).state;
+    s = move(s, 's1', 2, 1);
+    s = move(s, 's2', 4, 1);
     assertEqual(E.canActivate(s, 's3'), true, 'S+S+S is allowed after a heal');
-    s = E.apply(s, { type: 'move', piece: 's3', to: { row: 6, col: 1 } }).state;
+    s = move(s, 's3', 6, 1);
     assertEqual(E.usedKinds(s), ['S', 'S', 'S']);
   });
 
   /* ---------- merge ---------- */
 
-  function soldierOnFarRow() {
+  function onFarRow(kind) {
     var st = position([
-      { id: 's', owner: 0, kind: 'S', row: 6, col: 3 },
+      { id: 'p', owner: 0, kind: kind, row: 6, col: 3 },
       { id: 'other', owner: 0, kind: 'S', row: 0, col: 0 },
       { id: 'e', owner: 1, kind: 'S', row: 4, col: 7 }
     ]);
-    return E.apply(st, { type: 'move', piece: 's', to: { row: 7, col: 3 } });
+    return E.apply(st, { type: 'move', piece: 'p', to: { row: 7, col: 3 } });
   }
 
   test('merge: a soldier reaching row 7 gets pendingMerge and blocks everything else', function () {
-    var r = soldierOnFarRow();
-    assertEqual(r.state.pendingMerge, 's');
+    var r = onFarRow('S');
+    assertEqual(r.state.pendingMerge, 'p');
     assertEqual(eventTypes(r.events), ['move', 'mergePending']);
     assertThrows(function () { E.apply(r.state, { type: 'endTurn' }); }, 'endTurn throws while pending');
-    assertThrows(function () { E.apply(r.state, { type: 'move', piece: 'other', to: { row: 1, col: 0 } }); },
-      'no other action while pending');
+    assertThrows(function () { E.apply(r.state, { type: 'move', piece: 'other', to: { row: 1, col: 0 } }); });
     assertEqual(E.canActivate(r.state, 'other'), false);
     assertEqual(E.legalActions(r.state, 'other'), []);
   });
@@ -536,61 +734,43 @@
       { id: 's', owner: 1, kind: 'S', row: 1, col: 3 },
       { id: 'e', owner: 0, kind: 'S', row: 4, col: 7 }
     ], { player: 1 });
-    var r = E.apply(st, { type: 'move', piece: 's', to: { row: 0, col: 3 } });
-    assertEqual(r.state.pendingMerge, 's');
+    assertEqual(E.apply(st, { type: 'move', piece: 's', to: { row: 0, col: 3 } }).state.pendingMerge, 's');
   });
 
-  test('merge with K gives kinds [S,K], maxStr 4, str 4, move 4', function () {
-    var r = E.apply(soldierOnFarRow().state, { type: 'merge', piece: 's', kind: 'K' });
-    var p = r.state.pieces['s'];
+  test('merge: S with K gives hp 4, maxHp 4, baseStr 4 and move 4', function () {
+    var r = E.apply(onFarRow('S').state, { type: 'merge', piece: 'p', kind: 'K' });
+    var p = r.state.pieces['p'];
+    var st = E.pieceStats(p);
     assertEqual(p.kinds, ['S', 'K']);
-    assertEqual(p.maxStr, 4);
-    assertEqual(p.str, 4);
-    assertEqual(E.pieceStats(p).move, 4);
-    assertEqual(E.pieceStats(p).comboKind, 'K');
+    assertEqual([p.hp, p.maxHp], [4, 4]);
+    assertEqual([st.baseStr, st.str, st.move], [4, 4, 4]);
+    assertEqual(st.comboKind, 'K');
     assertEqual(r.state.pendingMerge, null);
-    assertEqual(r.events, [{ type: 'merge', id: 's', kinds: ['S', 'K'] }]);
+    assertEqual(r.events, [{ type: 'merge', id: 'p', kinds: ['S', 'K'] }]);
   });
 
-  test('merge with A gives fire 2 at range 1', function () {
-    var r = E.apply(soldierOnFarRow().state, { type: 'merge', piece: 's', kind: 'A' });
-    var st = E.pieceStats(r.state.pieces['s']);
-    assertEqual(r.state.pieces['s'].kinds, ['S', 'A']);
-    assertEqual(st.fire, 2);
-    assertEqual(st.range, 1);
-    assertEqual(st.str, 1);
-    assertEqual(st.maxStr, 1);
-    assertEqual(st.move, 2);
+  test('merge: S with A gives fire 2 at range 2 and maxHp 4', function () {
+    var r = E.apply(onFarRow('S').state, { type: 'merge', piece: 'p', kind: 'A' });
+    var st = E.pieceStats(r.state.pieces['p']);
+    assertEqual(r.state.pieces['p'].kinds, ['S', 'A']);
+    assertEqual([st.fire, st.range], [2, 2]);
+    assertEqual([st.hp, st.maxHp], [4, 4]);
+    assertEqual([st.baseStr, st.str, st.move], [1, 1, 2]);
   });
 
-  test('merge: other choices follow the spec examples', function () {
-    function statsAfter(own, chosen) {
-      var st = position([
-        { id: 'p', owner: 0, kind: own, row: 6, col: 3 },
-        { id: 'e', owner: 1, kind: 'S', row: 4, col: 7 }
-      ]);
-      var moved = E.apply(st, { type: 'move', piece: 'p', to: { row: 7, col: 3 } }).state;
-      var merged = E.apply(moved, { type: 'merge', piece: 'p', kind: chosen }).state;
-      return E.pieceStats(merged.pieces['p']);
-    }
-    var ka = statsAfter('K', 'A');
-    assertEqual([ka.move, ka.str, ka.fire, ka.range], [4, 3, 2, 1], 'K+A');
-    var kk = statsAfter('K', 'K');
-    assertEqual([kk.move, kk.str], [4, 6], 'K+K');
-    var ss = statsAfter('S', 'S');
-    assertEqual([ss.move, ss.str], [2, 2], 'S+S');
-    var aa = statsAfter('A', 'A');
-    assertEqual([aa.move, aa.str, aa.fire, aa.range], [2, 0, 4, 2], 'A+A');
+  test('merge: A with A gives fire 4 at range 2 and maxHp 6', function () {
+    var r = E.apply(onFarRow('A').state, { type: 'merge', piece: 'p', kind: 'A' });
+    var st = E.pieceStats(r.state.pieces['p']);
+    assertEqual([st.fire, st.range], [4, 2], 'fire adds up, range is the max');
+    assertEqual([st.hp, st.maxHp], [6, 6]);
+    assertEqual([st.baseStr, st.str, st.move], [0, 0, 2]);
   });
 
-  test('merge: skipMerge clears the pending merge and leaves the piece alone', function () {
-    var pending = soldierOnFarRow().state;
-    var r = E.apply(pending, { type: 'skipMerge', piece: 's' });
-    assertEqual(r.state.pendingMerge, null);
-    assertEqual(r.state.pieces['s'].kinds, ['S']);
-    assertEqual(r.state.pieces['s'].str, 1);
-    assertEqual(r.events, []);
-    assertEqual(E.apply(r.state, { type: 'endTurn' }).state.turn.player, 1, 'endTurn works again');
+  test('merge: K with A and K with K follow the spec', function () {
+    var ka = E.pieceStats(E.apply(onFarRow('K').state, { type: 'merge', piece: 'p', kind: 'A' }).state.pieces['p']);
+    assertEqual([ka.move, ka.maxHp, ka.str, ka.fire, ka.range], [4, 6, 3, 2, 2], 'K+A');
+    var kk = E.pieceStats(E.apply(onFarRow('K').state, { type: 'merge', piece: 'p', kind: 'K' }).state.pieces['p']);
+    assertEqual([kk.move, kk.maxHp, kk.str, kk.fire], [4, 6, 6, 0], 'K+K');
   });
 
   test('merge: a hybrid on the far row does not merge again', function () {
@@ -601,6 +781,15 @@
     var r = E.apply(st, { type: 'move', piece: 'h', to: { row: 7, col: 3 } });
     assertEqual(r.state.pendingMerge, null);
     assertEqual(eventTypes(r.events), ['move']);
+  });
+
+  test('merge: skipMerge clears the pending merge and leaves the piece alone', function () {
+    var r = E.apply(onFarRow('S').state, { type: 'skipMerge', piece: 'p' });
+    assertEqual(r.state.pendingMerge, null);
+    assertEqual(r.state.pieces['p'].kinds, ['S']);
+    assertEqual(r.state.pieces['p'].hp, 1);
+    assertEqual(r.events, []);
+    assertEqual(E.apply(r.state, { type: 'endTurn' }).state.turn.player, 1, 'endTurn works again');
   });
 
   test('merge: an attack that ends on the far row promotes too', function () {
@@ -651,7 +840,7 @@
 
   test('endTurn switches the player, bumps the number and clears used', function () {
     var st = E.newGame({}, 0);
-    var moved = E.apply(st, { type: 'move', piece: 'p0-0', to: { row: 1, col: 0 } }).state;
+    var moved = move(st, 'p0-0', 1, 0);
     var r = E.apply(moved, { type: 'endTurn' });
     assertEqual(r.state.turn.player, 1);
     assertEqual(r.state.turn.number, 2);
@@ -663,7 +852,6 @@
   });
 
   test('pass: a player with no legal action is skipped', function () {
-    // player 1 has nothing to act with, so the turn comes straight back to player 0
     var st = position([{ id: 's', owner: 0, kind: 'S', row: 3, col: 3 }]);
     assertEqual(E.hasAnyAction(st), true);
     var r = E.apply(st, { type: 'endTurn' });
@@ -681,29 +869,34 @@
     assertEqual(eventTypes(r.events), ['turnEnd', 'turnStart', 'pass', 'turnStart', 'pass', 'gameOver']);
   });
 
-  test('a piece of the other player cannot act', function () {
+  test('a piece of the other player cannot act, and nonsense is refused', function () {
     var st = E.newGame({}, 0);
     assertEqual(E.canActivate(st, 'p1-0'), false);
     assertEqual(E.legalActions(st, 'p1-0'), []);
     assertThrows(function () { E.apply(st, { type: 'move', piece: 'p1-0', to: { row: 6, col: 0 } }); });
     assertEqual(E.legalActions(st, 'nope'), [], 'an unknown id has no actions');
+    assertEqual(E.reachable(st, 'nope'), {}, 'nor a reachable set');
     assertThrows(function () { E.apply(st, { type: 'nonsense' }); });
   });
 
   /* ---------- serialization and immutability ---------- */
 
-  test('serialize then deserialize reproduces the state', function () {
-    var st = E.newGame({ diagonalFire: false }, 1);
+  test('serialize then deserialize reproduces the state under the WG2 prefix', function () {
+    var st = E.newGame({ diagonalMoves: false }, 1);
     var code = E.serialize(st);
-    assert(code.indexOf('WG1.') === 0, 'prefix');
+    assert(code.indexOf('WG2.') === 0, 'prefix');
     assert(!/[+\/=]/.test(code), 'url-safe base64');
     assertEqual(E.deserialize(code), st, 'round trip');
 
     var played = E.apply(st, { type: 'move', piece: 'p1-0', to: { row: 6, col: 0 } }).state;
     assertEqual(E.deserialize(E.serialize(played)), played, 'round trip after an action');
+  });
 
+  test('deserialize refuses a version 1 code and anything malformed', function () {
+    assertThrows(function () { E.deserialize('WG1.x'); }, 'a version 1 code is refused');
+    assertThrows(function () { E.deserialize('WG1.' + E.serialize(E.newGame({}, 0)).slice(4)); });
     assertThrows(function () { E.deserialize('nonsense'); });
-    assertThrows(function () { E.deserialize('WG1.@@@@'); });
+    assertThrows(function () { E.deserialize('WG2.@@@@'); });
     assertThrows(function () { E.deserialize(null); });
   });
 
@@ -717,39 +910,42 @@
     unchanged(game, { type: 'move', piece: 'p0-0', to: { row: 1, col: 0 } });
     unchanged(game, { type: 'endTurn' });
 
-    var fight = position([
+    unchanged(position([
       { id: 'a', owner: 0, kind: 'K', row: 3, col: 3 },
       { id: 'd', owner: 1, kind: 'S', row: 3, col: 4 },
       { id: 'sp1', owner: 1, kind: 'S', row: 7, col: 7 }
-    ]);
-    unchanged(fight, { type: 'attack', piece: 'a', target: 'd' });
+    ]), { type: 'attack', piece: 'a', target: 'd' });
 
-    var shooter = position([
+    unchanged(position([
       { id: 'a', owner: 0, kind: 'A', row: 3, col: 3 },
       { id: 'd', owner: 1, kind: 'K', row: 3, col: 4 }
-    ]);
-    unchanged(shooter, { type: 'fire', piece: 'a', target: 'd' });
+    ]), { type: 'fire', piece: 'a', target: 'd' });
 
-    var hurt = position([
-      { id: 'k', owner: 0, kind: 'K', str: 2, row: 3, col: 3 },
+    unchanged(position([
+      { id: 'k', owner: 0, kind: 'K', hp: 2, row: 3, col: 3 },
       { id: 'e', owner: 1, kind: 'S', row: 7, col: 7 }
-    ]);
-    unchanged(hurt, { type: 'heal', piece: 'k' });
+    ]), { type: 'heal', piece: 'k' });
 
-    var pending = soldierOnFarRow().state;
-    unchanged(pending, { type: 'merge', piece: 's', kind: 'K' });
-    unchanged(pending, { type: 'skipMerge', piece: 's' });
+    var pending = onFarRow('S').state;
+    unchanged(pending, { type: 'merge', piece: 'p', kind: 'K' });
+    unchanged(pending, { type: 'skipMerge', piece: 'p' });
+
+    var moved = E.apply(archerAndTarget(), { type: 'move', piece: 'a', to: { row: 3, col: 4 } }).state;
+    unchanged(moved, { type: 'fire', piece: 'a', target: 'e' });
   });
 
-  test('legalActions and the other readers do not mutate the state', function () {
+  test('the readers do not mutate the state', function () {
     var st = E.newGame({}, 0);
     var before = JSON.stringify(st);
     E.legalActions(st, 'p0-8');
+    E.reachable(st, 'p0-8');
     E.hasAnyAction(st);
     E.activatableKinds(st);
     E.usedKinds(st);
+    E.canFireAgain(st, 'p0-8');
     E.piecesOf(st, 0);
     E.pieceAt(st, 0, 0);
+    E.pieceStats(st.pieces['p0-8']);
     assertEqual(JSON.stringify(st), before);
   });
 
